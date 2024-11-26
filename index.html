@@ -35,7 +35,7 @@
 <body>
     <div class="container">
         <h1>Camera Upload</h1>
-        <video id="camera" autoplay playsinline></video>
+        <video id="camera" autoplay playsinline onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
         <div>
             <button id="capture" class="button">Take Photo</button>
             <button id="upload" class="button" style="display:none;">Upload to Drive</button>
@@ -82,13 +82,37 @@
             }, 'image/jpeg', 0.8);
         });
 
-        document.getElementById('upload').addEventListener('click', () => {
+        document.getElementById('upload').addEventListener('click', async () => {
             if (imageBlob) {
-                uploadToDrive(imageBlob);
+                const uploadBtn = document.getElementById('upload');
+                uploadBtn.disabled = true;
+                uploadBtn.textContent = 'Uploading...';
+                try {
+                    await uploadToDrive(imageBlob);
+                    uploadBtn.textContent = 'Upload to Drive';
+                } catch (error) {
+                    console.error('Upload failed:', error);
+                    alert('Upload failed. Please try again.');
+                } finally {
+                    uploadBtn.disabled = false;
+                }
             }
         });
 
         startCamera();
+
+        function handleVideoError(error) {
+            console.error('Video error:', error);
+            alert('Error loading video stream. Please check your camera permissions.');
+        }
+
+        // Cleanup camera stream when page is closed
+        window.addEventListener('beforeunload', () => {
+            const video = document.getElementById('camera');
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+            }
+        });
     </script>
     <script src="drive-upload.js"></script>
 </body>

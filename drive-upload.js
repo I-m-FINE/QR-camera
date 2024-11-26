@@ -2,6 +2,7 @@
 const CLIENT_ID = '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com';
 const API_KEY = 'AIzaSyCiSB89a73LV0jvQJca2B6lx2slwgNFX6I';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'; // Replace with your folder ID
 
 // Load the Google API client library
 function loadGoogleAPI() {
@@ -50,6 +51,7 @@ async function uploadToDrive(imageBlob) {
         const metadata = {
             name: fileName,
             mimeType: 'image/jpeg',
+            parents: [FOLDER_ID]  // This specifies the destination folder
         };
 
         const form = new FormData();
@@ -74,7 +76,7 @@ async function uploadToDrive(imageBlob) {
         return result;
     } catch (error) {
         console.error('Error uploading to Google Drive:', error);
-        throw error; // Re-throw to be caught by the caller
+        throw error;
     }
 }
 

@@ -45,6 +45,7 @@ async function uploadToDrive(imageBlob) {
     }
 
     const fileName = 'photo_' + new Date().getTime() + '.jpg';
+    console.log('Checking Google API initialization...');
     const metadata = {
         name: fileName,
         mimeType: 'image/jpeg',
@@ -75,3 +76,25 @@ async function uploadToDrive(imageBlob) {
 
 // Load the Google API when the page loads
 document.addEventListener('DOMContentLoaded', loadGoogleAPI);
+
+document.getElementById('upload').addEventListener('click', async () => {
+    if (!window.gapi || !gapi.auth2) {
+        alert('Google API not initialized. Please try refreshing the page.');
+        return;
+    }
+    
+    if (imageBlob) {
+        const uploadBtn = document.getElementById('upload');
+        uploadBtn.disabled = true;
+        uploadBtn.textContent = 'Uploading...';
+        try {
+            await uploadToDrive(imageBlob);
+            uploadBtn.textContent = 'Upload to Drive';
+        } catch (error) {
+            console.error('Upload failed:', error);
+            alert('Upload failed. Please try again.');
+        } finally {
+            uploadBtn.disabled = false;
+        }
+    }
+});

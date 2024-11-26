@@ -43,21 +43,22 @@ function updateSigninStatus(isSignedIn) {
 
 async function uploadToDrive(imageBlob) {
     try {
-        if (!gapi || !gapi.auth2) {
-            console.error('Google API not loaded');
-            throw new Error('Google API not initialized');
-        }
-
+        // Always prompt for account selection
         if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
-            console.log('User not signed in, requesting sign in...');
-            await gapi.auth2.getAuthInstance().signIn();
+            await gapi.auth2.getAuthInstance().signIn({
+                prompt: 'select_account',
+                ux_mode: 'popup'
+            });
         }
 
         const fileName = 'photo_' + new Date().getTime() + '.jpg';
         const metadata = {
             name: fileName,
             mimeType: 'image/jpeg',
-            parents: [FOLDER_ID]
+            parents: [FOLDER_ID],
+            // Make files publicly accessible
+            writersCanShare: true,
+            copyRequiresWriterPermission: false
         };
 
         const form = new FormData();
@@ -65,8 +66,6 @@ async function uploadToDrive(imageBlob) {
         form.append('file', imageBlob);
 
         const accessToken = gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token;
-        console.log('Making upload request...');
-        
         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
             method: 'POST',
             headers: {
@@ -76,17 +75,14 @@ async function uploadToDrive(imageBlob) {
         });
 
         if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Upload failed:', response.status, errorText);
-            throw new Error(`Upload failed: ${response.status} ${errorText}`);
+            throw new Error(`Upload failed: ${response.status}`);
         }
 
         const result = await response.json();
-        console.log('Upload successful:', result);
-        alert('File uploaded successfully!');
+        alert('Photo uploaded successfully!');
         return result;
     } catch (error) {
-        console.error('Detailed upload error:', error);
+        console.error('Error:', error);
         throw error;
     }
 }

@@ -28,6 +28,7 @@ async function initializeGoogleAPI() {
         updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
     } catch (error) {
         console.error('Error initializing Google API:', error);
+        alert('Error initializing Google API. Please check your credentials.');
     }
 }
 
@@ -40,22 +41,21 @@ function updateSigninStatus(isSignedIn) {
 }
 
 async function uploadToDrive(imageBlob) {
-    if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
-        await gapi.auth2.getAuthInstance().signIn();
-    }
-
-    const fileName = 'photo_' + new Date().getTime() + '.jpg';
-    console.log('Checking Google API initialization...');
-    const metadata = {
-        name: fileName,
-        mimeType: 'image/jpeg',
-    };
-
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
-    form.append('file', imageBlob);
-
     try {
+        if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
+            await gapi.auth2.getAuthInstance().signIn();
+        }
+
+        const fileName = 'photo_' + new Date().getTime() + '.jpg';
+        const metadata = {
+            name: fileName,
+            mimeType: 'image/jpeg',
+        };
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
+        form.append('file', imageBlob);
+
         const accessToken = gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token;
         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
             method: 'POST',
@@ -65,12 +65,16 @@ async function uploadToDrive(imageBlob) {
             body: form,
         });
 
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+
         const result = await response.json();
         alert('File uploaded successfully!');
         return result;
     } catch (error) {
         console.error('Error uploading to Google Drive:', error);
-        alert('Error uploading file. Please try again.');
+        throw error; // Re-throw to be caught by the caller
     }
 }
 

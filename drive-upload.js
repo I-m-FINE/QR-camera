@@ -43,46 +43,64 @@ function updateSigninStatus(isSignedIn) {
 
 async function uploadToDrive(imageBlob) {
     try {
-        // Always prompt for account selection
-        if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
+        // Check if Google API is loaded
+        if (!window.gapi) {
+            console.error('Google API not loaded');
+            throw new Error('Google API not initialized - please refresh the page');
+        }
+
+        // Force new sign-in
+        try {
             await gapi.auth2.getAuthInstance().signIn({
                 prompt: 'select_account',
                 ux_mode: 'popup'
             });
+        } catch (signInError) {
+            console.error('Sign in error:', signInError);
+            throw new Error('Failed to sign in to Google - please try again');
         }
 
         const fileName = 'photo_' + new Date().getTime() + '.jpg';
+        console.log('Preparing to upload:', fileName);
+
         const metadata = {
             name: fileName,
             mimeType: 'image/jpeg',
-            parents: [FOLDER_ID],
-            // Make files publicly accessible
-            writersCanShare: true,
-            copyRequiresWriterPermission: false
+            parents: [FOLDER_ID]
         };
 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], {type: 'application/json'}));
         form.append('file', imageBlob);
 
+        // Get fresh access token
         const accessToken = gapi.auth2.getAuthInstance().currentUser.get().getAuthResponse().access_token;
+        console.log('Got access token, attempting upload...');
+
         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
             method: 'POST',
             headers: {
-                Authorization: `Bearer ${accessToken}`,
+                'Authorization': `Bearer ${accessToken}`,
+                'Content-Type': 'multipart/related; boundary=foo_bar_baz'
             },
-            body: form,
+            body: form
         });
 
+        // Log detailed error information
         if (!response.ok) {
-            throw new Error(`Upload failed: ${response.status}`);
+            const errorText = await response.text();
+            console.error('Upload response:', response.status, errorText);
+            throw new Error(`Upload failed with status ${response.status}: ${errorText}`);
         }
 
         const result = await response.json();
+        console.log('Upload successful:', result);
         alert('Photo uploaded successfully!');
         return result;
+
     } catch (error) {
-        console.error('Error:', error);
+        console.error('Detailed upload error:', error);
+        alert('Upload failed: ' + error.message);
         throw error;
     }
 }
@@ -111,3 +129,11 @@ document.getElementById('upload').addEventListener('click', async () => {
         }
     }
 });
+
+// Add this to check API loading
+window.onload = function() {
+    if (!window.gapi) {
+        console.error('Google API failed to load');
+        alert('Failed to load Google API - please check your internet connection and try again');
+    }
+};

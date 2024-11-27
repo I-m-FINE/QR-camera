@@ -6,41 +6,105 @@
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
     <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: Arial, sans-serif;
+            background-color: #f0f0f0;
+        }
+
         .container {
+            width: 100%;
             max-width: 800px;
             margin: 0 auto;
-            padding: 20px;
+            padding: 15px;
             text-align: center;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            min-height: 100vh;
         }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #333;
+        }
+
         #camera {
             width: 100%;
             max-width: 500px;
-            margin: 20px 0;
+            margin: 10px 0;
+            border-radius: 10px;
         }
+
+        .button-container {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: center;
+            gap: 10px;
+            margin: 15px 0;
+            width: 100%;
+            padding: 0 10px;
+        }
+
         .button {
-            padding: 10px 20px;
-            margin: 5px;
+            padding: 12px 20px;
             background-color: #4CAF50;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 25px;
             cursor: pointer;
+            font-size: 16px;
+            min-width: 120px;
+            transition: background-color 0.3s;
         }
-        #preview {
-            max-width: 500px;
-            margin: 20px 0;
-            display: none;
+
+        .button:active {
+            transform: scale(0.98);
         }
-        #videoPreview {
-            max-width: 500px;
-            margin: 20px 0;
-            display: none;
-        }
+
         #recordButton {
-            background-color: #f44336;  /* Red color for record button */
+            background-color: #f44336;
         }
+
         #recordButton.recording {
-            background-color: #9e9e9e;  /* Gray when recording */
+            background-color: #9e9e9e;
+        }
+
+        #preview, #videoPreview {
+            width: 100%;
+            max-width: 500px;
+            margin: 15px 0;
+            display: none;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+        }
+
+        /* Media queries for different screen sizes */
+        @media (max-width: 480px) {
+            .container {
+                padding: 10px;
+            }
+
+            h1 {
+                font-size: 20px;
+            }
+
+            .button {
+                padding: 10px 15px;
+                font-size: 14px;
+                min-width: 100px;
+            }
+
+            #camera, #preview, #videoPreview {
+                max-width: 100%;
+                margin: 8px 0;
+            }
         }
     </style>
 </head>
@@ -48,7 +112,7 @@
     <div class="container">
         <h1>Camera Upload</h1>
         <video id="camera" autoplay playsinline onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
-        <div>
+        <div class="button-container">
             <button id="switchCamera" class="button">Switch Camera</button>
             <button id="capture" class="button">Take Photo</button>
             <button id="recordButton" class="button">Record Video</button>

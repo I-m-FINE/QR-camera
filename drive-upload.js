@@ -3,7 +3,7 @@ const CLIENT_ID = '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleuser
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 
-async function uploadToDrive(imageBlob) {
+async function uploadToDrive(blob, type = 'image') {
     try {
         // Get token using Google Identity Services
         const client = google.accounts.oauth2.initTokenClient({
@@ -12,16 +12,20 @@ async function uploadToDrive(imageBlob) {
             callback: async (tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
                     try {
-                        const fileName = 'photo_' + new Date().getTime() + '.jpg';
+                        const timestamp = new Date().getTime();
+                        const fileExtension = type === 'video' ? '.webm' : '.jpg';
+                        const mimeType = type === 'video' ? 'video/webm' : 'image/jpeg';
+                        const fileName = `${type}_${timestamp}${fileExtension}`;
+                        
                         const metadata = {
                             name: fileName,
-                            mimeType: 'image/jpeg',
+                            mimeType: mimeType,
                             parents: [FOLDER_ID]
                         };
 
                         const form = new FormData();
                         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                        form.append('file', imageBlob);
+                        form.append('file', blob);
 
                         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                             method: 'POST',

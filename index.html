@@ -31,6 +31,12 @@
             margin: 20px 0;
             display: none;
         }
+        #recordButton {
+            background-color: #f44336;  /* Red color for record button */
+        }
+        #recordButton.recording {
+            background-color: #9e9e9e;  /* Gray when recording */
+        }
     </style>
 </head>
 <body>
@@ -39,6 +45,7 @@
         <video id="camera" autoplay playsinline onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
         <div>
             <button id="capture" class="button">Take Photo</button>
+            <button id="recordButton" class="button">Record Video</button>
             <button id="upload" class="button" style="display:none;">Upload to Drive</button>
         </div>
         <canvas id="canvas" style="display:none;"></canvas>
@@ -47,6 +54,9 @@
 
     <script>
         let imageBlob = null;
+        let videoBlob = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
 
         async function startCamera() {
             try {
@@ -83,14 +93,44 @@
             }, 'image/jpeg', 0.8);
         });
 
+        document.getElementById('recordButton').addEventListener('click', () => {
+            const recordBtn = document.getElementById('recordButton');
+            const video = document.getElementById('camera');
+            const uploadBtn = document.getElementById('upload');
+            
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                // Start recording
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(video.srcObject);
+                mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const preview = document.getElementById('preview');
+                    preview.src = URL.createObjectURL(videoBlob);
+                    preview.style.display = 'block';
+                    uploadBtn.style.display = 'inline-block';
+                };
+                mediaRecorder.start();
+                recordBtn.textContent = 'Stop Recording';
+                recordBtn.classList.add('recording');
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                recordBtn.textContent = 'Record Video';
+                recordBtn.classList.remove('recording');
+            }
+        });
+
         document.getElementById('upload').addEventListener('click', async () => {
-            if (imageBlob) {
+            if (imageBlob || videoBlob) {
                 const uploadBtn = document.getElementById('upload');
                 uploadBtn.disabled = true;
                 uploadBtn.textContent = 'Uploading...';
                 try {
-                    await uploadToDrive(imageBlob);
+                    await uploadToDrive(imageBlob || videoBlob, videoBlob ? 'video' : 'image');
                     uploadBtn.textContent = 'Upload to Drive';
+                    imageBlob = null;
+                    videoBlob = null;
                 } catch (error) {
                     console.error('Upload failed:', error);
                     alert('Upload failed. Please try again.');

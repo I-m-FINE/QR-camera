@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -232,6 +233,127 @@
             transform-origin: center;
             transition: transform 0.2s ease-out;
         }
+
+        .camera-controls {
+            position: absolute;
+            z-index: 10;
+            display: flex;
+            gap: 20px;
+        }
+
+        .top-controls {
+            top: 20px;
+            right: 20px;
+        }
+
+        .control-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.3s;
+        }
+
+        .control-button:hover {
+            background: rgba(0, 0, 0, 0.7);
+        }
+
+        .control-button.active {
+            background: #2196F3;
+        }
+
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+        }
+
+        .grid-line {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.5);
+        }
+
+        .grid-line.vertical {
+            width: 1px;
+            height: 100%;
+        }
+
+        .grid-line.horizontal {
+            height: 1px;
+            width: 100%;
+        }
+
+        .grid-line.vertical:nth-child(1) { left: 33.33%; }
+        .grid-line.vertical:nth-child(2) { left: 66.66%; }
+        .grid-line.horizontal:nth-child(3) { top: 33.33%; }
+        .grid-line.horizontal:nth-child(4) { top: 66.66%; }
+
+        .timer-display {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 72px;
+            color: white;
+            text-shadow: 0 0 10px rgba(0,0,0,0.5);
+            z-index: 100;
+        }
+
+        .filter-options, .timer-options {
+            position: absolute;
+            bottom: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 10px;
+            background: rgba(0, 0, 0, 0.7);
+            padding: 10px;
+            border-radius: 20px;
+            z-index: 10;
+        }
+
+        .filter-button, .timer-button {
+            padding: 8px 16px;
+            border: none;
+            border-radius: 15px;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+        }
+
+        .filter-button.active, .timer-button.active {
+            background: #2196F3;
+        }
+
+        .capture-feedback {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: white;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @keyframes capture-animation {
+            0% { opacity: 0; }
+            50% { opacity: 0.5; }
+            100% { opacity: 0; }
+        }
+
+        .capturing {
+            animation: capture-animation 0.3s ease-out;
+        }
     </style>
 </head>
 <body>
@@ -241,6 +363,45 @@
             <video id="camera" autoplay playsinline onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
             <img id="preview" alt="Preview">
             <video id="videoPreview" controls></video>
+            <div class="camera-controls top-controls">
+                <button class="control-button" id="flashButton">
+                    <i class="fas fa-bolt"></i>
+                </button>
+                <button class="control-button" id="timerButton">
+                    <i class="fas fa-stopwatch"></i>
+                </button>
+                <button class="control-button" id="gridButton">
+                    <i class="fas fa-th"></i>
+                </button>
+                <button class="control-button" id="filterButton">
+                    <i class="fas fa-magic"></i>
+                </button>
+            </div>
+
+            <div class="timer-display" id="timerDisplay" style="display: none;">3</div>
+
+            <div class="grid-overlay" id="gridOverlay" style="display: none;">
+                <div class="grid-line vertical"></div>
+                <div class="grid-line vertical"></div>
+                <div class="grid-line horizontal"></div>
+                <div class="grid-line horizontal"></div>
+            </div>
+
+            <div class="filter-options" id="filterOptions" style="display: none;">
+                <button class="filter-button" data-filter="none">Normal</button>
+                <button class="filter-button" data-filter="grayscale(100%)">B&W</button>
+                <button class="filter-button" data-filter="sepia(100%)">Sepia</button>
+                <button class="filter-button" data-filter="contrast(150%)">Contrast</button>
+                <button class="filter-button" data-filter="brightness(150%)">Bright</button>
+                <button class="filter-button" data-filter="saturate(200%)">Vivid</button>
+            </div>
+
+            <div class="timer-options" id="timerOptions" style="display: none;">
+                <button class="timer-button" data-seconds="0">Off</button>
+                <button class="timer-button" data-seconds="3">3s</button>
+                <button class="timer-button" data-seconds="5">5s</button>
+                <button class="timer-button" data-seconds="10">10s</button>
+            </div>
         </div>
         <div class="zoom-controls">
             <button class="zoom-button" data-zoom="0.5">0.5x</button>
@@ -267,6 +428,13 @@
         let currentFacingMode = 'environment'; // Track current camera
         let currentZoom = 1;
         let currentStream = null;
+        let isFlashOn = false;
+        let isFrontCamera = false;
+        let currentFilter = 'none';
+        let isGridVisible = false;
+        let isMuted = false;
+        let isTimerActive = false;
+        let timerDuration = 0;
 
         async function startCamera(facingMode = 'environment') {
             try {

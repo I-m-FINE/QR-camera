@@ -777,11 +777,16 @@
                 };
                 
                 mediaRecorder.onstop = async () => {
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    lastCaptureBlob = blob;
-                    updatePreviewButton(blob);
-                    await uploadToGoogleDrive(blob, 'video');
-                    showStatus('Video recorded and uploaded!');
+                    try {
+                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        lastCaptureBlob = blob;
+                        updatePreviewButton(blob);
+                        showStatus('Uploading video...');
+                        await uploadToGoogleDrive(blob, 'video');
+                    } catch (error) {
+                        console.error('Video processing error:', error);
+                        showStatus('Failed to process video');
+                    }
                 };
                 
                 mediaRecorder.start();
@@ -837,28 +842,35 @@
             });
         }
 
-        // Updated upload function
+        // Fixed upload functions
         async function uploadToGoogleDrive(blob, type) {
             try {
                 showStatus('Starting upload...');
                 
-                // Ensure we have token
+                // Check if we're authenticated
                 if (!gapi.client.getToken()) {
-                    // Get authorization first
-                    tokenClient.callback = async (resp) => {
-                        if (resp.error !== undefined) {
-                            throw resp;
-                        }
-                        await uploadFile(blob, type);
-                    };
-                    tokenClient.requestAccessToken();
-                    return;
+                    return new Promise((resolve, reject) => {
+                        tokenClient.callback = async (resp) => {
+                            if (resp.error !== undefined) {
+                                reject(resp);
+                                return;
+                            }
+                            try {
+                                await uploadFile(blob, type);
+                                resolve();
+                            } catch (error) {
+                                reject(error);
+                            }
+                        };
+                        tokenClient.requestAccessToken({ prompt: 'consent' });
+                    });
                 }
                 
                 await uploadFile(blob, type);
             } catch (error) {
                 console.error('Upload error:', error);
                 showStatus('Upload failed. Please try again.');
+                throw error;
             }
         }
 
@@ -868,39 +880,36 @@
                 const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
 
                 // Convert blob to base64
-                const base64Data = await blobToBase64(blob);
+                const base64Data = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+
                 const metadata = {
                     name: fileName,
                     mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
                 };
 
-                // Upload to Drive
                 const response = await gapi.client.drive.files.create({
                     resource: metadata,
                     media: {
                         mimeType: metadata.mimeType,
-                        body: base64Data.split(',')[1]
+                        body: base64Data
                     },
-                    fields: 'id'
+                    fields: 'id,webViewLink'
                 });
 
-                console.log('File uploaded, ID:', response.result.id);
+                console.log('File uploaded successfully:', response.result.webViewLink);
                 showStatus('Upload successful!');
+                return response.result;
+
             } catch (error) {
                 console.error('Upload failed:', error);
                 showStatus('Upload failed. Retrying...');
-                setTimeout(() => uploadFile(blob, type), 2000);
+                throw error;
             }
-        }
-
-        // Helper function to convert blob to base64
-        function blobToBase64(blob) {
-            return new Promise((resolve, reject) => {
-                const reader = new FileReader();
-                reader.onloadend = () => resolve(reader.result);
-                reader.onerror = reject;
-                reader.readAsDataURL(blob);
-            });
         }
 
         function handleVideoError(error) {

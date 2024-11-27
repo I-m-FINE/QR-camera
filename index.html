@@ -5,6 +5,8 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
+    <script src="https://apis.google.com/js/api.js"></script>
+    <script src="https://accounts.google.com/gsi/client"></script>
     <style>
         * {
             margin: 0;
@@ -343,7 +345,7 @@
             <button id="recordButton" class="button">Record Video</button>
             <div class="shutter-overlay"></div>
             <div id="statusMessage" class="status-message"></div>
-            <button id="upload" class="button">Upload to Drive</button>
+            <button id="upload" class="button" style="display: none;">Upload to Drive</button>
         </div>
     </div>
     <div class="status-message" id="statusMessage"></div>
@@ -372,6 +374,46 @@
         let isProcessing = false; // Prevent multiple simultaneous operations
         let lastCaptureBlob = null;
         let isPreviewVisible = false;
+
+        // Google Drive API configuration
+        const CLIENT_ID = 'YOUR_CLIENT_ID';
+        const API_KEY = 'YOUR_API_KEY';
+        const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
+        const SCOPES = 'https://www.googleapis.com/auth/drive.file';
+
+        let tokenClient;
+        let gapiInited = false;
+        let gisInited = false;
+
+        // Initialize the API
+        function gapiLoaded() {
+            gapi.load('client', initializeGapiClient);
+        }
+
+        async function initializeGapiClient() {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: [DISCOVERY_DOC],
+            });
+            gapiInited = true;
+            maybeEnableButtons();
+        }
+
+        function gisLoaded() {
+            tokenClient = google.accounts.oauth2.initTokenClient({
+                client_id: CLIENT_ID,
+                scope: SCOPES,
+                callback: '', // defined later
+            });
+            gisInited = true;
+            maybeEnableButtons();
+        }
+
+        function maybeEnableButtons() {
+            if (gapiInited && gisInited) {
+                document.getElementById('upload').style.display = 'block';
+            }
+        }
 
         async function getCameras() {
             try {
@@ -802,31 +844,70 @@
             }
         }
 
-        // Simplified upload function without restrictions
+        // Updated upload function
         async function uploadToGoogleDrive(blob, type) {
             try {
-                const formData = new FormData();
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
+                showStatus('Starting upload...');
                 
-                formData.append('file', blob, fileName);
-                
-                const response = await fetch('/upload-to-drive', {
-                    method: 'POST',
-                    body: formData
-                });
-                
-                if (!response.ok) {
-                    throw new Error('Upload failed');
+                // Ensure we have token
+                if (!gapi.client.getToken()) {
+                    // Get authorization first
+                    tokenClient.callback = async (resp) => {
+                        if (resp.error !== undefined) {
+                            throw resp;
+                        }
+                        await uploadFile(blob, type);
+                    };
+                    tokenClient.requestAccessToken();
+                    return;
                 }
                 
-                showStatus(`${type} uploaded successfully!`);
+                await uploadFile(blob, type);
             } catch (error) {
                 console.error('Upload error:', error);
-                showStatus('Failed to upload. Retrying...');
-                // Retry upload
-                setTimeout(() => uploadToGoogleDrive(blob, type), 1000);
+                showStatus('Upload failed. Please try again.');
             }
+        }
+
+        async function uploadFile(blob, type) {
+            try {
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
+
+                // Convert blob to base64
+                const base64Data = await blobToBase64(blob);
+                const metadata = {
+                    name: fileName,
+                    mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
+                };
+
+                // Upload to Drive
+                const response = await gapi.client.drive.files.create({
+                    resource: metadata,
+                    media: {
+                        mimeType: metadata.mimeType,
+                        body: base64Data.split(',')[1]
+                    },
+                    fields: 'id'
+                });
+
+                console.log('File uploaded, ID:', response.result.id);
+                showStatus('Upload successful!');
+            } catch (error) {
+                console.error('Upload failed:', error);
+                showStatus('Upload failed. Retrying...');
+                setTimeout(() => uploadFile(blob, type), 2000);
+            }
+        }
+
+        // Helper function to convert blob to base64
+        function blobToBase64(blob) {
+            return new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onloadend = () => resolve(reader.result);
+                reader.onerror = reject;
+                reader.readAsDataURL(blob);
+            });
         }
 
         function handleVideoError(error) {

@@ -368,9 +368,14 @@
             <button id="recordButton" class="button">Record Video</button>
             <div class="shutter-overlay"></div>
             <div id="statusMessage" class="status-message"></div>
-            <button id="upload" class="button" style="display: none;">Upload to Drive</button>
-            <button id="uploadPhoto" style="display: none;">Upload Photo to Drive</button>
-            <button id="uploadVideo" style="display: none;">Upload Video to Drive</button>
+        </div>
+        <div class="camera-controls">
+            <button id="uploadPhoto" class="control-button" style="display: none;">
+                Upload Photo
+            </button>
+            <button id="uploadVideo" class="control-button" style="display: none;">
+                Upload Video
+            </button>
         </div>
     </div>
     <div class="status-message" id="statusMessage"></div>
@@ -404,6 +409,12 @@
         let gisInited = false;
         let currentPhoto = null;
         let currentVideo = null;
+
+        // Add this at the beginning of your script
+        function debugLog(message, data = null) {
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] ${message}`, data || '');
+        }
 
         // Initialize the API
         function gapiLoaded() {
@@ -728,7 +739,7 @@
             // ... your existing initialization code ...
         });
 
-        // Simplified capture photo function with better button handling
+        // Update the capture photo function
         async function capturePhoto() {
             debugLog('Starting photo capture');
             if (isProcessing) {
@@ -761,7 +772,7 @@
                 }
 
                 debugLog('Photo captured successfully', { blobSize: capturedBlob.size });
-                lastCaptureBlob = capturedBlob;
+                window.capturedMedia.currentPhoto = capturedBlob;
                 await updatePreviewButton(capturedBlob);
                 window.handleCapture(capturedBlob, 'image');
 
@@ -774,7 +785,7 @@
             }
         }
 
-        // Record video
+        // Update the video recording handler
         async function toggleRecording() {
             if (isProcessing) return;
             

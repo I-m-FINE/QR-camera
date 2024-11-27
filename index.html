@@ -272,19 +272,23 @@
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1920 },
-                        height: { ideal: 1080 },
-                        zoom: true  // Request zoom capability
+                        height: { ideal: 1080 }
                     },
                     audio: false
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
-                currentStream = stream;  // Store the stream reference
+                currentStream = stream;
                 currentFacingMode = facingMode;
 
-                // Initialize zoom capabilities
+                // Debug: Log camera capabilities
                 const track = stream.getVideoTracks()[0];
+                console.log('Track capabilities:', track.getCapabilities());
+                console.log('Track settings:', track.getSettings());
+                console.log('Track constraints:', track.getConstraints());
+
+                // Initialize zoom capabilities
                 const capabilities = track.getCapabilities();
                 const settings = track.getSettings();
 
@@ -292,24 +296,20 @@
                 const zoomSlider = document.getElementById('zoomSlider');
                 const zoomControls = document.querySelector('.zoom-controls');
 
-                if (capabilities.zoom) {
+                if (capabilities && capabilities.zoom) {
+                    console.log('Zoom is supported! Range:', capabilities.zoom.min, 'to', capabilities.zoom.max);
                     zoomControls.style.display = 'flex';
                     zoomSlider.min = capabilities.zoom.min;
                     zoomSlider.max = capabilities.zoom.max;
                     zoomSlider.value = settings.zoom || 1;
-                    zoomSlider.step = (capabilities.zoom.max - capabilities.zoom.min) / 100;
                     
                     // Update current zoom display
                     document.getElementById('zoomLevel').textContent = `${(settings.zoom || 1).toFixed(1)}x`;
-                    
-                    // Set initial zoom level
-                    await setZoom(currentZoom);
                 } else {
+                    console.log('Zoom is NOT supported on this device');
                     zoomControls.style.display = 'none';
-                    console.log('Zoom is not supported on this device');
                 }
 
-                // Return promise for when video is ready
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play()

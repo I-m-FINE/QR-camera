@@ -2,33 +2,28 @@ window.googleApi = {
     state: {
         tokenClient: null,
         gapiInited: false,
-        gisInited: false,
-        accessToken: null
+        gisInited: false
     }
 };
 
+// Initialize Google API
 window.initGoogleApi = async function() {
     try {
-        // First load the gapi client
+        // Load GAPI client
         await new Promise((resolve) => {
-            gapi.load('client', {
-                callback: resolve,
-                onerror: () => console.error('Error loading GAPI client'),
-                timeout: 5000,
-                ontimeout: () => console.error('Timeout loading GAPI client')
-            });
+            gapi.load('client', resolve);
         });
 
-        // Initialize the client
+        // Initialize GAPI client
         await gapi.client.init({
             apiKey: window.googleApiConfig.API_KEY,
             discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
         });
 
-        // Load the Drive API
+        // Load Drive API
         await gapi.client.load('drive', 'v3');
 
-        // Initialize token client
+        // Create token client
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: window.googleApiConfig.CLIENT_ID,
             scope: window.googleApiConfig.SCOPES,
@@ -36,8 +31,6 @@ window.initGoogleApi = async function() {
         });
 
         window.googleApi.state.gapiInited = true;
-        window.googleApi.state.gisInited = true;
-        
         console.log('Google API initialized successfully');
         return true;
     } catch (error) {
@@ -46,47 +39,54 @@ window.initGoogleApi = async function() {
     }
 };
 
+// Get access token
+async function getAccessToken() {
+    return new Promise((resolve, reject) => {
+        try {
+            const tokenClient = window.googleApi.state.tokenClient;
+            if (!tokenClient) {
+                throw new Error('Token client not initialized');
+            }
+
+            tokenClient.requestAccessToken({
+                prompt: '',
+                callback: (tokenResponse) => {
+                    if (tokenResponse.error !== undefined) {
+                        reject(tokenResponse.error);
+                    } else {
+                        resolve(tokenResponse.access_token);
+                    }
+                }
+            });
+        } catch (error) {
+            reject(error);
+        }
+    });
+}
+
+// Upload to Google Drive
 window.uploadToGoogleDrive = async function(blob, type) {
     try {
+        // Check initialization
         if (!window.googleApi.state.gapiInited) {
-            await window.initGoogleApi();
+            const initialized = await window.initGoogleApi();
+            if (!initialized) {
+                throw new Error('Failed to initialize Google API');
+            }
         }
 
         showStatus('Starting upload...');
 
-        // Get token using a different approach
-        const tokenClient = window.googleApi.state.tokenClient;
-        if (!tokenClient) {
-            throw new Error('Token client not initialized');
-        }
-
-        // Request access token
-        const token = await new Promise((resolve, reject) => {
-            const handleTokenResponse = (response) => {
-                if (response.error !== undefined) {
-                    reject(new Error(response.error));
-                } else {
-                    resolve(response);
-                }
-            };
-
-            try {
-                tokenClient.requestAccessToken({
-                    callback: handleTokenResponse
-                });
-            } catch (err) {
-                reject(err);
-            }
-        });
-
-        // Set the access token
-        if (token && token.access_token) {
-            gapi.client.setToken(token);
-        } else {
+        // Get access token
+        const accessToken = await getAccessToken();
+        if (!accessToken) {
             throw new Error('Failed to get access token');
         }
 
-        // Create file metadata
+        // Set access token
+        gapi.client.setToken({ access_token: accessToken });
+
+        // Prepare file metadata
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
         const mimeType = type === 'image' ? 'image/jpeg' : 'video/webm';
@@ -94,14 +94,17 @@ window.uploadToGoogleDrive = async function(blob, type) {
         // Convert blob to base64
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
+            reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                resolve(base64);
+            };
+            reader.onerror = () => reject(new Error('Failed to read file'));
             reader.readAsDataURL(blob);
         });
 
-        // Upload file
+        // Create the upload request
         const response = await gapi.client.drive.files.create({
-            resource: { 
+            resource: {
                 name: fileName,
                 mimeType: mimeType
             },
@@ -111,6 +114,10 @@ window.uploadToGoogleDrive = async function(blob, type) {
             },
             fields: 'id,webViewLink'
         });
+
+        if (!response.result || !response.result.webViewLink) {
+            throw new Error('Upload failed - No response from server');
+        }
 
         console.log('File uploaded successfully:', response.result.webViewLink);
         showStatus('Upload successful!');
@@ -124,10 +131,13 @@ window.uploadToGoogleDrive = async function(blob, type) {
 };
 
 // Initialize on page load
-window.addEventListener('load', () => {
-    window.initGoogleApi()
-        .then(() => console.log('Google API initialized on page load'))
-        .catch(error => console.error('Failed to initialize Google API:', error));
+window.addEventListener('load', async () => {
+    try {
+        await window.initGoogleApi();
+        console.log('Google API initialized on page load');
+    } catch (error) {
+        console.error('Failed to initialize Google API:', error);
+    }
 });
 
 console.log('Drive upload script loaded successfully');

@@ -50,56 +50,78 @@
             align-items: center;
             justify-content: center;
             position: relative;
+            overflow: hidden !important;
+            border-radius: 16px;
+            background-color: #2a2a2a;
         }
 
         #camera {
+            position: absolute;
             width: 100%;
             height: 100%;
             object-fit: cover;
-            border-radius: 16px;
-            background-color: #2a2a2a;
-            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            transform-origin: center center;
+            transition: transform 0.2s ease-out;
         }
 
         .button-container {
             width: 100%;
             display: flex;
-            flex-wrap: wrap;
-            justify-content: center;
+            flex-direction: column;
+            align-items: center;
             gap: 12px;
             padding: 16px;
             z-index: 2;
         }
 
-        /* Landscape orientation styles */
-        @media screen and (orientation: landscape) {
-            .container {
-                flex-direction: row;
-                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-            }
+        .button {
+            width: 100%;
+            max-width: 200px;
+            padding: 14px 24px;
+            border: none;
+            border-radius: 30px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: 600;
+            background-color: #2196F3;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
 
-            .camera-container {
-                height: 100%;
-                flex: 1;
-            }
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            z-index: 3;
+            width: auto;
+        }
 
-            .button-container {
-                flex-direction: column;
-                width: auto;
-                padding: 16px;
-            }
+        .zoom-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 14px;
+        }
 
-            h1 {
-                writing-mode: vertical-lr;
-                transform: rotate(180deg);
-                white-space: nowrap;
-                margin: 0 16px;
-            }
+        #zoomSlider {
+            width: 100px;
+            margin: 0 8px;
+        }
 
-            #preview, #videoPreview {
-                max-height: 100vh;
-                width: auto;
-            }
+        #zoomLevel {
+            color: white;
+            min-width: 40px;
+            text-align: center;
         }
 
         /* Preview elements */
@@ -115,47 +137,26 @@
             background-color: #2a2a2a;
         }
 
-        /* Status message improvements */
-        .status-message {
-            position: fixed;
-            top: env(safe-area-inset-top, 20px);
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(33, 33, 33, 0.95);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 30px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1000;
-            display: none;
-            animation: slideDown 0.3s ease;
-            max-width: 90%;
-            text-align: center;
+        /* Camera controls */
+        .camera-controls {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 12px;
+            z-index: 10;
         }
 
-        /* Button styles remain the same but add rotation handling */
-        .button {
-            padding: 14px 24px;
+        .control-button {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.5);
             border: none;
-            border-radius: 30px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            min-width: 130px;
-            transition: all 0.3s ease;
-            background-color: #2196F3;
             color: white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            position: relative;
-            overflow: hidden;
-            transform: rotate(0deg);
-        }
-
-        @media screen and (orientation: landscape) {
-            .button {
-                transform: rotate(0deg);
-                margin: 4px 0;
-            }
+            display: flex;
+            align-items: center;
+            justify-content: center;
         }
 
         /* iOS specific fixes */
@@ -167,54 +168,32 @@
             .container {
                 height: -webkit-fill-available;
             }
-
-            #camera {
-                object-fit: cover;
-            }
         }
 
-        /* Existing animations and other styles remain the same */
-
-        .zoom-controls {
-            position: absolute;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px 16px;
-            border-radius: 20px;
-            z-index: 3;
-        }
-
-        .zoom-button {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .zoom-button:hover {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        #zoomSlider {
-            width: 100px;
-            margin: 0 8px;
-        }
-
-        #zoomLevel {
-            color: white;
-            min-width: 40px;
-            text-align: center;
-        }
-
+        /* Landscape mode adjustments */
         @media screen and (orientation: landscape) {
+            .container {
+                flex-direction: row;
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            }
+
+            .camera-container {
+                height: 100%;
+                flex: 1;
+            }
+
+            .button-container {
+                width: auto;
+                padding: 16px;
+            }
+
+            h1 {
+                writing-mode: vertical-lr;
+                transform: rotate(180deg);
+                white-space: nowrap;
+                margin: 0 16px;
+            }
+
             .zoom-controls {
                 flex-direction: column;
                 left: unset;
@@ -222,150 +201,6 @@
                 bottom: 50%;
                 transform: translateY(50%);
             }
-        }
-
-        .camera-container {
-            overflow: hidden !important;
-        }
-        
-        #camera {
-            transform-origin: center;
-            transition: transform 0.2s ease-out;
-        }
-
-        .camera-controls {
-            position: absolute;
-            z-index: 10;
-            display: flex;
-            gap: 20px;
-        }
-
-        .top-controls {
-            top: 20px;
-            right: 20px;
-        }
-
-        .control-button {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(0, 0, 0, 0.5);
-            border: none;
-            color: white;
-            cursor: pointer;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: background 0.3s;
-        }
-
-        .control-button:hover {
-            background: rgba(0, 0, 0, 0.7);
-        }
-
-        .control-button.active {
-            background: #2196F3;
-        }
-
-        .grid-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            pointer-events: none;
-        }
-
-        .grid-line {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.5);
-        }
-
-        .grid-line.vertical {
-            width: 1px;
-            height: 100%;
-        }
-
-        .grid-line.horizontal {
-            height: 1px;
-            width: 100%;
-        }
-
-        .grid-line.vertical:nth-child(1) { left: 33.33%; }
-        .grid-line.vertical:nth-child(2) { left: 66.66%; }
-        .grid-line.horizontal:nth-child(3) { top: 33.33%; }
-        .grid-line.horizontal:nth-child(4) { top: 66.66%; }
-
-        .timer-display {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 72px;
-            color: white;
-            text-shadow: 0 0 10px rgba(0,0,0,0.5);
-            z-index: 100;
-        }
-
-        .filter-options, .timer-options {
-            position: absolute;
-            bottom: 100px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 10px;
-            background: rgba(0, 0, 0, 0.7);
-            padding: 10px;
-            border-radius: 20px;
-            z-index: 10;
-        }
-
-        .filter-button, .timer-button {
-            padding: 8px 16px;
-            border: none;
-            border-radius: 15px;
-            background: rgba(255, 255, 255, 0.2);
-            color: white;
-            cursor: pointer;
-        }
-
-        .filter-button.active, .timer-button.active {
-            background: #2196F3;
-        }
-
-        .capture-feedback {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: white;
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        @keyframes capture-animation {
-            0% { opacity: 0; }
-            50% { opacity: 0.5; }
-            100% { opacity: 0; }
-        }
-
-        .capturing {
-            animation: capture-animation 0.3s ease-out;
-        }
-
-        .camera-container {
-            overflow: hidden !important;
-            position: relative;
-        }
-        
-        #camera {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform-origin: center center;
-            transition: transform 0.2s ease-out;
-            transform: translate(-50%, -50%) scale(1);
         }
     </style>
 </head>

@@ -284,6 +284,27 @@
         .recording {
             background: #ff4444 !important;
         }
+
+        .control-button {
+            background: #2196F3;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .control-button:hover {
+            background: #1976D2;
+        }
+        
+        .control-button i {
+            font-size: 1.2em;
+        }
     </style>
 </head>
 <body>
@@ -1023,6 +1044,19 @@
         document.getElementById('uploadVideo').addEventListener('click', async () => {
             if (currentVideo) {
                 await uploadToGoogleDrive(currentVideo, 'video');
+            }
+        });
+
+        // Add these event listeners after your existing ones
+        document.getElementById('uploadPhoto')?.addEventListener('click', async () => {
+            if (window.capturedMedia.currentPhoto) {
+                await window.uploadToGoogleDrive(window.capturedMedia.currentPhoto, 'image');
+            }
+        });
+
+        document.getElementById('uploadVideo')?.addEventListener('click', async () => {
+            if (window.capturedMedia.currentVideo) {
+                await window.uploadToGoogleDrive(window.capturedMedia.currentVideo, 'video');
             }
         });
     </script>

@@ -41,6 +41,33 @@ window.initGoogleApi = async function() {
     }
 };
 
+// Global variables to store captured media
+window.capturedMedia = {
+    currentPhoto: null,
+    currentVideo: null
+};
+
+// Function to show upload button
+function showUploadButton(type) {
+    const buttonId = type === 'image' ? 'uploadPhoto' : 'uploadVideo';
+    const button = document.getElementById(buttonId);
+    if (button) {
+        button.style.display = 'block';
+        button.classList.add('control-button'); // Add the same styling as other buttons
+    }
+}
+
+// Update the capture functions
+window.handleCapture = function(blob, type) {
+    if (type === 'image') {
+        window.capturedMedia.currentPhoto = blob;
+        showUploadButton('image');
+    } else {
+        window.capturedMedia.currentVideo = blob;
+        showUploadButton('video');
+    }
+};
+
 // Upload to Google Drive
 window.uploadToGoogleDrive = async function(blob, type) {
     if (!blob) {

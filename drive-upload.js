@@ -5,37 +5,40 @@ const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 
 let accessToken = null;
 
+// Initialize Google Sign-in when page loads
+document.addEventListener('DOMContentLoaded', async () => {
+    // Load Google Identity Services
+    await new Promise((resolve) => {
+        const script = document.createElement('script');
+        script.src = 'https://accounts.google.com/gsi/client';
+        script.async = true;
+        script.defer = true;
+        script.onload = resolve;
+        document.body.appendChild(script);
+    });
+
+    // Initialize token client
+    const client = google.accounts.oauth2.initTokenClient({
+        client_id: CLIENT_ID,
+        scope: SCOPES,
+        callback: (tokenResponse) => {
+            if (tokenResponse && tokenResponse.access_token) {
+                accessToken = tokenResponse.access_token;
+                console.log('Successfully authenticated with Google Drive');
+            }
+        },
+    });
+
+    // Request token immediately
+    client.requestAccessToken();
+});
+
 async function uploadToDrive(blob, type = 'image') {
     try {
-        // Check if we have a cached token
-        if (accessToken) {
-            // Try to use the cached token
-            try {
-                return await performUpload(blob, type, accessToken);
-            } catch (error) {
-                // If token is invalid, clear it and continue to get new token
-                if (error.message.includes('401')) {
-                    accessToken = null;
-                } else {
-                    throw error;
-                }
-            }
+        if (!accessToken) {
+            throw new Error('Not authenticated with Google Drive');
         }
-
-        // Get new token using Google Identity Services
-        const client = google.accounts.oauth2.initTokenClient({
-            client_id: CLIENT_ID,
-            scope: SCOPES,
-            callback: async (tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                    // Store the token
-                    accessToken = tokenResponse.access_token;
-                    return await performUpload(blob, type, accessToken);
-                }
-            },
-        });
-
-        client.requestAccessToken();
+        return await performUpload(blob, type, accessToken);
     } catch (error) {
         console.error('Error:', error);
         throw error;
@@ -74,12 +77,3 @@ async function performUpload(blob, type, token) {
     alert(`${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully!`);
     return result;
 }
-
-// Load Google Identity Services when page loads
-document.addEventListener('DOMContentLoaded', () => {
-    const script = document.createElement('script');
-    script.src = 'https://accounts.google.com/gsi/client';
-    script.async = true;
-    script.defer = true;
-    document.body.appendChild(script);
-});

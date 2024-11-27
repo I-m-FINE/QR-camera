@@ -40,7 +40,7 @@ async function uploadToDrive(blob, type = 'image') {
                         }
 
                         const result = await response.json();
-                        alert('Photo uploaded successfully!');
+                        alert(`${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully!`);
                         return result;
                     } catch (error) {
                         console.error('Upload error:', error);

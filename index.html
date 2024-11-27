@@ -431,12 +431,11 @@
             }
 
             try {
-                // First try: Basic environment-facing camera
                 const constraints = {
                     video: {
                         facingMode: currentFacingMode,
-                        width: { ideal: 1280 }, // Reduced from 1920 for better compatibility
-                        height: { ideal: 720 }  // Reduced from 1080 for better compatibility
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
                     },
                     audio: false
                 };
@@ -446,49 +445,22 @@
                 video.srcObject = stream;
                 currentStream = stream;
 
-                // Ensure video plays
-                await video.play();
-                
-                console.log('Camera started with facing mode:', currentFacingMode);
-                showStatus('Camera started');
-
-            } catch (firstError) {
-                console.error('First attempt failed:', firstError);
-                
-                try {
-                    // Second try: Fallback to simpler constraints
-                    const fallbackConstraints = {
-                        video: {
-                            facingMode: { exact: currentFacingMode }
-                        },
-                        audio: false
+                // Wait for video to be ready before playing
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = async () => {
+                        try {
+                            await video.play();
+                            resolve();
+                        } catch (error) {
+                            console.error('Play error:', error);
+                            resolve(); // Continue even if play fails
+                        }
                     };
+                });
 
-                    const fallbackStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
-                    const video = document.getElementById('camera');
-                    video.srcObject = fallbackStream;
-                    currentStream = fallbackStream;
-                    await video.play();
-
-                } catch (secondError) {
-                    console.error('Second attempt failed:', secondError);
-                    
-                    try {
-                        // Third try: Most basic video constraint
-                        const basicStream = await navigator.mediaDevices.getUserMedia({ 
-                            video: true,
-                            audio: false
-                        });
-                        const video = document.getElementById('camera');
-                        video.srcObject = basicStream;
-                        currentStream = basicStream;
-                        await video.play();
-
-                    } catch (finalError) {
-                        console.error('All attempts failed:', finalError);
-                        showStatus('Failed to start camera. Please check permissions.');
-                    }
-                }
+            } catch (error) {
+                console.error('Camera start error:', error);
+                showStatus('Camera access failed');
             }
         }
 
@@ -733,24 +705,25 @@
 
         // Simplified capture photo function with better button handling
         async function capturePhoto() {
-            const captureButton = document.getElementById('capture');
+            if (isProcessing) return;
             
-            // Check if button is already processing
-            if (isProcessing) {
-                return;
-            }
+            const captureButton = document.getElementById('capture');
+            if (!captureButton) return;
             
             try {
                 isProcessing = true;
-                captureButton.disabled = true; // Disable button during processing
+                captureButton.disabled = true;
                 
-                // Visual feedback
-                const shutterOverlay = document.querySelector('.shutter-overlay');
-                shutterOverlay.classList.add('shutter-animation');
-                showStatus('Taking photo...');
-
-                // Capture the photo
                 const video = document.getElementById('camera');
+                if (!video || !video.srcObject) {
+                    throw new Error('Camera not ready');
+                }
+
+                // Ensure video is playing and has valid dimensions
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                }
+
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
@@ -758,7 +731,6 @@
                 const context = canvas.getContext('2d');
                 context.drawImage(video, 0, 0);
                 
-                // Convert to blob
                 const blob = await new Promise((resolve) => {
                     canvas.toBlob(resolve, 'image/jpeg', 0.8);
                 });
@@ -767,30 +739,18 @@
                     throw new Error('Failed to create image');
                 }
 
-                // Update UI and upload
                 lastCaptureBlob = blob;
                 updatePreviewButton(blob);
                 showStatus('Photo captured!');
-                
-                // Try to upload
-                try {
-                    await uploadToGoogleDrive(blob, 'image');
-                } catch (uploadError) {
-                    console.error('Upload failed:', uploadError);
-                    showStatus('Photo taken, but upload failed');
-                }
 
             } catch (error) {
-                console.error('Error capturing photo:', error);
+                console.error('Capture error:', error);
                 showStatus('Failed to take photo');
             } finally {
-                // Cleanup
                 isProcessing = false;
-                captureButton.disabled = false; // Re-enable button
-                
-                setTimeout(() => {
-                    document.querySelector('.shutter-overlay').classList.remove('shutter-animation');
-                }, 500);
+                if (captureButton) {
+                    captureButton.disabled = false;
+                }
             }
         }
 
@@ -831,10 +791,25 @@
 
         // Update preview button
         function updatePreviewButton(blob) {
-            const previewButton = document.getElementById('previewButton');
-            const previewThumbnail = document.getElementById('previewThumbnail');
-            previewThumbnail.src = URL.createObjectURL(blob);
-            previewButton.style.display = 'block';
+            try {
+                const previewButton = document.getElementById('previewButton');
+                const previewThumbnail = document.getElementById('previewThumbnail');
+                
+                if (previewButton && previewThumbnail && blob) {
+                    const url = URL.createObjectURL(blob);
+                    previewThumbnail.src = url;
+                    previewButton.style.display = 'block';
+                    
+                    // Clean up old URLs
+                    const oldUrl = previewThumbnail.dataset.blobUrl;
+                    if (oldUrl) {
+                        URL.revokeObjectURL(oldUrl);
+                    }
+                    previewThumbnail.dataset.blobUrl = url;
+                }
+            } catch (error) {
+                console.error('Preview update error:', error);
+            }
         }
 
         // Updated upload function

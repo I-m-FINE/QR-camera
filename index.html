@@ -46,7 +46,6 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            background-color: #000;
         }
 
         .button-container {
@@ -200,7 +199,7 @@
     <div class="container">
         <h1>Camera Upload</h1>
         <div class="camera-container">
-            <video id="camera" autoplay playsinline onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
+            <video id="camera" autoplay playsinline></video>
             <img id="preview" alt="Preview">
             <video id="videoPreview" controls></video>
             <div class="camera-controls top-controls">
@@ -299,84 +298,99 @@
                 currentStream.getTracks().forEach(track => track.stop());
             }
 
-            const video = document.getElementById('camera');
-            let stream = null;
-
             try {
+                // First try: Basic environment-facing camera
                 const constraints = {
                     video: {
-                        deviceId: cameras[currentCameraIndex]?.deviceId 
-                            ? { exact: cameras[currentCameraIndex].deviceId }
-                            : undefined,
-                        facingMode: cameras[currentCameraIndex]?.label?.toLowerCase().includes('back') 
-                            ? 'environment' 
-                            : 'user',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1280 }, // Reduced from 1920 for better compatibility
+                        height: { ideal: 720 }  // Reduced from 1080 for better compatibility
+                    },
+                    audio: false
                 };
 
-                stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                const video = document.getElementById('camera');
                 video.srcObject = stream;
                 currentStream = stream;
 
-                // Wait for video to be ready
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play().then(resolve).catch(e => {
-                            console.error('Error playing video:', e);
-                            resolve();
-                        });
-                    };
-                });
-
-                // Check if the video is actually playing
-                if (video.videoWidth === 0 || video.videoHeight === 0) {
-                    throw new Error('Video dimensions are zero. Camera may not be working.');
-                }
-
-                await setupCameraControls();
-                showStatus('Camera started successfully');
-            } catch (error) {
-                console.error('Error starting camera:', error);
-                showStatus('Error starting camera: ' + error.message);
+                // Ensure video plays
+                await video.play();
                 
-                // If we failed with device ID, try without it
-                if (cameras[currentCameraIndex]?.deviceId) {
-                    console.log('Retrying without device ID...');
-                    cameras[currentCameraIndex].deviceId = undefined;
-                    await startCamera();
-                } else if (currentCameraIndex !== 0) {
-                    console.log('Trying first camera...');
-                    currentCameraIndex = 0;
-                    await startCamera();
-                } else {
-                    showStatus('Failed to start any camera. Please check permissions.');
+                console.log('Camera started with facing mode:', currentFacingMode);
+                showStatus('Camera started');
+
+            } catch (firstError) {
+                console.error('First attempt failed:', firstError);
+                
+                try {
+                    // Second try: Fallback to simpler constraints
+                    const fallbackConstraints = {
+                        video: {
+                            facingMode: { exact: currentFacingMode }
+                        },
+                        audio: false
+                    };
+
+                    const fallbackStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                    const video = document.getElementById('camera');
+                    video.srcObject = fallbackStream;
+                    currentStream = fallbackStream;
+                    await video.play();
+
+                } catch (secondError) {
+                    console.error('Second attempt failed:', secondError);
+                    
+                    try {
+                        // Third try: Most basic video constraint
+                        const basicStream = await navigator.mediaDevices.getUserMedia({ 
+                            video: true,
+                            audio: false
+                        });
+                        const video = document.getElementById('camera');
+                        video.srcObject = basicStream;
+                        currentStream = basicStream;
+                        await video.play();
+
+                    } catch (finalError) {
+                        console.error('All attempts failed:', finalError);
+                        showStatus('Failed to start camera. Please check permissions.');
+                    }
                 }
             }
         }
 
         async function switchCamera() {
-            if (cameras.length < 2) {
-                showStatus('Only one camera available');
-                return;
-            }
-            currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            console.log('Switching to:', currentFacingMode);
             await startCamera();
         }
 
-        // Update initialization
+        // Update your initialization
         document.addEventListener('DOMContentLoaded', async () => {
             try {
-                await getCameras();
                 await startCamera();
                 
+                // Add event listeners
                 document.getElementById('switchCamera').addEventListener('click', switchCamera);
-                // ... other event listeners ...
                 
+                // Handle page visibility changes
+                document.addEventListener('visibilitychange', () => {
+                    if (document.visibilityState === 'visible') {
+                        startCamera();
+                    }
+                });
+
             } catch (error) {
                 console.error('Initialization failed:', error);
                 showStatus('Failed to initialize camera');
+            }
+        });
+
+        // Add this to ensure proper cleanup
+        window.addEventListener('beforeunload', () => {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
             }
         });
 

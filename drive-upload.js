@@ -1,11 +1,5 @@
-// Create a namespace for Google API configuration
+// Remove all direct declarations and use a namespace
 window.googleApi = {
-    config: {
-        API_KEY: 'YOUR_API_KEY',
-        CLIENT_ID: 'YOUR_CLIENT_ID',
-        DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
-        SCOPES: 'https://www.googleapis.com/auth/drive.file'
-    },
     state: {
         tokenClient: null,
         gapiInited: false,
@@ -23,14 +17,14 @@ window.initGoogleApi = async function() {
 
         // Initialize the client
         await gapi.client.init({
-            apiKey: window.googleApi.config.API_KEY,
-            discoveryDocs: [window.googleApi.config.DISCOVERY_DOC],
+            apiKey: 'AIzaSyCiSB89a73LV0jvQJca2B6lx2slwgNFX6I',
+            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
         });
 
         // Initialize token client
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: window.googleApi.config.CLIENT_ID,
-            scope: window.googleApi.config.SCOPES,
+            client_id: 'http://997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com', // Replace with your actual client ID
+            scope: 'https://www.googleapis.com/auth/drive.file',
             callback: '', // Will be set during upload
         });
 
@@ -47,26 +41,29 @@ window.initGoogleApi = async function() {
 
 // Upload function
 window.uploadToGoogleDrive = async function(blob, type) {
-    if (!window.googleApi.state.gapiInited || !window.googleApi.state.gisInited) {
-        throw new Error('Google API not initialized');
-    }
-
     try {
+        if (!window.googleApi.state.gapiInited || !window.googleApi.state.gisInited) {
+            throw new Error('Google API not initialized');
+        }
+
         showStatus('Starting upload...');
 
         // Handle authentication
-        if (!gapi.client.getToken()) {
-            await new Promise((resolve, reject) => {
-                window.googleApi.state.tokenClient.callback = (resp) => {
-                    if (resp.error) {
-                        reject(resp);
-                    } else {
-                        resolve(resp);
-                    }
-                };
-                window.googleApi.state.tokenClient.requestAccessToken();
-            });
+        if (!window.googleApi.state.tokenClient) {
+            throw new Error('Token client not initialized');
         }
+
+        // Request token
+        await new Promise((resolve, reject) => {
+            window.googleApi.state.tokenClient.callback = (resp) => {
+                if (resp.error) {
+                    reject(resp);
+                } else {
+                    resolve(resp);
+                }
+            };
+            window.googleApi.state.tokenClient.requestAccessToken({prompt: 'consent'});
+        });
 
         // Prepare file metadata
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

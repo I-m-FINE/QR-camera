@@ -247,6 +247,8 @@
         let videoHeight = 0;
         let cameras = [];
         let currentCameraIndex = 0;
+        let isInitialized = false;
+        let isProcessing = false; // Prevent multiple simultaneous operations
 
         async function getCameras() {
             try {
@@ -259,27 +261,76 @@
         }
 
         async function switchCamera() {
-            if (cameras.length < 2) {
-                console.log('Only one camera available');
-                return;
+            if (isProcessing) return;
+            isProcessing = true;
+            
+            try {
+                if (cameras.length < 2) {
+                    showStatus('Only one camera available');
+                    return;
+                }
+
+                // Stop current stream properly
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => {
+                        track.stop();
+                        currentStream.removeTrack(track);
+                    });
+                }
+
+                currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+                isFlashOn = false; // Reset flash state
+                document.getElementById('flashButton').classList.remove('active');
+                
+                await startCamera();
+                showStatus('Camera switched');
+            } catch (error) {
+                console.error('Error switching camera:', error);
+                showStatus('Failed to switch camera');
+            } finally {
+                isProcessing = false;
             }
-            currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
-            await startCamera();
         }
 
         async function startCamera() {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-
             try {
+                if (!cameras[currentCameraIndex]) {
+                    throw new Error('Selected camera not available');
+                }
+
                 const constraints = {
-                    video: { deviceId: cameras[currentCameraIndex].deviceId }
+                    video: {
+                        deviceId: { exact: cameras[currentCameraIndex].deviceId },
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
                 };
+
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                document.getElementById('camera').srcObject = currentStream;
+                const video = document.getElementById('camera');
+                video.srcObject = currentStream;
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = resolve;
+                });
+                
+                await video.play();
+
+                // Check and setup flash capability
+                const track = currentStream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                const flashButton = document.getElementById('flashButton');
+                flashButton.style.display = capabilities?.torch ? 'block' : 'none';
+                
             } catch (error) {
                 console.error('Error starting camera:', error);
+                showStatus('Error starting camera: ' + error.message);
+                // Try to recover by switching to first camera
+                if (currentCameraIndex !== 0) {
+                    currentCameraIndex = 0;
+                    await startCamera();
+                }
             }
         }
 
@@ -304,9 +355,8 @@
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
-            const video = document.getElementById('camera');
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
             }
         });
 
@@ -318,172 +368,216 @@
 
         // Initialize camera after DOM is fully loaded
         document.addEventListener('DOMContentLoaded', async () => {
-            await getCameras();
-            await startCamera();
-            
-            document.getElementById('switchCamera').addEventListener('click', switchCamera);
-            
-            // Add iOS specific class if needed
-            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                document.body.classList.add('ios-device');
+            try {
+                await initializeCamera();
+                
+                // Event listeners with error handling
+                const addSafeEventListener = (id, event, handler) => {
+                    const element = document.getElementById(id);
+                    if (element) {
+                        element.addEventListener(event, async (e) => {
+                            try {
+                                await handler(e);
+                            } catch (error) {
+                                console.error(`Error in ${id} handler:`, error);
+                                showStatus('Operation failed');
+                            }
+                        });
+                    }
+                };
+
+                addSafeEventListener('switchCamera', 'click', switchCamera);
+                addSafeEventListener('capture', 'click', capturePhoto);
+                addSafeEventListener('recordButton', 'click', toggleRecording);
+                addSafeEventListener('flashButton', 'click', toggleFlash);
+                
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                showStatus('Failed to initialize camera');
             }
-
-            // Add zoom controls event listeners
-            document.querySelectorAll('.zoom-button').forEach(button => {
-                button.addEventListener('click', () => {
-                    const zoomLevel = parseFloat(button.dataset.zoom);
-                    setZoom(zoomLevel);
-                });
-            });
-
-            const zoomSlider = document.getElementById('zoomSlider');
-            zoomSlider.addEventListener('input', (e) => {
-                setZoom(parseFloat(e.target.value));
-            });
         });
 
-        // Update capture function for better iOS compatibility
-        document.getElementById('capture').addEventListener('click', async () => {
-            const video = document.getElementById('camera');
-            const canvas = document.getElementById('canvas');
-            const preview = document.getElementById('preview');
-            const videoPreview = document.getElementById('videoPreview');
-            const uploadBtn = document.getElementById('upload');
+        async function initializeCamera() {
+            try {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported');
+                }
+                
+                await getCameras();
+                
+                if (cameras.length === 0) {
+                    throw new Error('No cameras found');
+                }
+                
+                await startCamera();
+                isInitialized = true;
+            } catch (error) {
+                console.error('Camera initialization failed:', error);
+                showStatus('Camera initialization failed: ' + error.message);
+            }
+        }
 
-            // Clear previous recording/capture
-            videoBlob = null;
-            recordedChunks = [];
-            videoPreview.style.display = 'none';
+        // Update your toggleFlash function
+        async function toggleFlash() {
+            if (!currentStream) return;
+            
+            const track = currentStream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+            
+            if (!capabilities.torch) {
+                alert('Flash not supported on this device');
+                return;
+            }
+            
+            isFlashOn = !isFlashOn;
+            try {
+                await track.applyConstraints({
+                    advanced: [{ torch: isFlashOn }]
+                });
+                document.getElementById('flashButton').classList.toggle('active', isFlashOn);
+            } catch (error) {
+                console.error('Error toggling flash:', error);
+                alert('Error toggling flash');
+            }
+        }
 
-            // Ensure video is playing before capture
-            if (video.paused) {
-                await video.play();
+        // Add this function to handle responsive layout
+        function adjustLayout() {
+            const root = document.documentElement;
+            const windowHeight = window.innerHeight;
+            const windowWidth = window.innerWidth;
+            
+            // Adjust camera height based on screen size
+            if (windowHeight < 600) {
+                root.style.setProperty('--camera-height', '50vh');
+                root.style.setProperty('--button-spacing', '8px');
+            } else if (windowHeight < 800) {
+                root.style.setProperty('--camera-height', '60vh');
+                root.style.setProperty('--button-spacing', '10px');
+            } else {
+                root.style.setProperty('--camera-height', '65vh');
+                root.style.setProperty('--button-spacing', '12px');
             }
 
-            // Set canvas size to match video's actual size
-            const videoAspectRatio = video.videoWidth / video.videoHeight;
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
+            // Adjust for different screen widths
+            if (windowWidth < 360) {
+                root.style.setProperty('--control-size', '35px');
+            } else {
+                root.style.setProperty('--control-size', '40px');
+            }
+        }
 
-            // Draw video frame to canvas
-            canvas.getContext('2d').drawImage(video, 0, 0);
+        // Call on load and resize
+        window.addEventListener('load', adjustLayout);
+        window.addEventListener('resize', adjustLayout);
+        window.addEventListener('orientationchange', () => {
+            // Small delay to ensure orientation change is complete
+            setTimeout(adjustLayout, 100);
+        });
 
-            // Convert canvas to blob with proper orientation
-            canvas.toBlob((blob) => {
+        // Add to your existing DOMContentLoaded event
+        document.addEventListener('DOMContentLoaded', () => {
+            adjustLayout();
+            // ... your existing initialization code ...
+        });
+
+        // Improved photo capture with error handling
+        async function capturePhoto() {
+            if (isProcessing) return;
+            isProcessing = true;
+            
+            try {
+                const video = document.getElementById('camera');
+                const canvas = document.getElementById('canvas');
+                const preview = document.getElementById('preview');
+                
+                if (!video.srcObject || video.videoWidth === 0) {
+                    throw new Error('Camera not ready');
+                }
+
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                
+                const blob = await new Promise((resolve) => {
+                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
+                });
+                
+                if (!blob) {
+                    throw new Error('Failed to create image');
+                }
+
                 imageBlob = blob;
                 preview.src = URL.createObjectURL(blob);
                 preview.style.display = 'block';
-                uploadBtn.style.display = 'inline-block';
-            }, 'image/jpeg', 0.8);
-        });
-
-        // Add switch camera button handler
-        document.getElementById('switchCamera').addEventListener('click', async () => {
-            // Toggle between front and back camera
-            const newMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            
-            // Stop recording if active
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-                const recordBtn = document.getElementById('recordButton');
-                recordBtn.textContent = 'Record Video';
-                recordBtn.classList.remove('recording');
-            }
-
-            try {
-                await startCamera(newMode);
-            } catch (error) {
-                console.error('Error switching camera:', error);
-                alert('Failed to switch camera. Your device might only have one camera.');
-            }
-        });
-
-        // Update the record button handler to use the current stream
-        document.getElementById('recordButton').addEventListener('click', () => {
-            const recordBtn = document.getElementById('recordButton');
-            const video = document.getElementById('camera');
-            const uploadBtn = document.getElementById('upload');
-            const preview = document.getElementById('preview');
-            const videoPreview = document.getElementById('videoPreview');
-            
-            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                // Clear previous recording
-                videoBlob = null;
-                imageBlob = null;
-                recordedChunks = [];
-                preview.style.display = 'none';
-                videoPreview.style.display = 'none';
-                uploadBtn.style.display = 'none';
+                document.getElementById('upload').style.display = 'block';
                 
-                // Start recording with current stream
-                mediaRecorder = new MediaRecorder(video.srcObject);
-                mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
-                mediaRecorder.onstop = () => {
-                    videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    videoPreview.src = URL.createObjectURL(videoBlob);
-                    videoPreview.style.display = 'block';
-                    uploadBtn.style.display = 'inline-block';
-                };
-                mediaRecorder.start();
-                recordBtn.textContent = 'Stop Recording';
-                recordBtn.classList.add('recording');
-            } else {
-                // Stop recording
-                mediaRecorder.stop();
-                recordBtn.textContent = 'Record Video';
-                recordBtn.classList.remove('recording');
+            } catch (error) {
+                console.error('Error capturing photo:', error);
+                showStatus('Failed to capture photo');
+            } finally {
+                isProcessing = false;
             }
-        });
+        }
 
-        document.getElementById('upload').addEventListener('click', async () => {
-            if (imageBlob || videoBlob) {
-                const uploadBtn = document.getElementById('upload');
-                uploadBtn.disabled = true;
-                uploadBtn.classList.add('loading');
-                try {
-                    await uploadToDrive(imageBlob || videoBlob, videoBlob ? 'video' : 'image');
-                    showStatus(`${videoBlob ? 'Video' : 'Photo'} uploaded successfully!`);
-                    uploadBtn.textContent = 'Upload to Drive';
-                    uploadBtn.style.display = 'none';
-                    
-                    // Clear previews
-                    const preview = document.getElementById('preview');
-                    const videoPreview = document.getElementById('videoPreview');
-                    preview.style.display = 'none';
-                    videoPreview.style.display = 'none';
-                    preview.src = '';
-                    videoPreview.src = '';
-                    
-                    // Reset blobs
-                    imageBlob = null;
-                    videoBlob = null;
-                    recordedChunks = [];
-                    
-                    // Stop current stream before restarting
-                    const video = document.getElementById('camera');
-                    if (video.srcObject) {
-                        video.srcObject.getTracks().forEach(track => track.stop());
-                    }
-                    
-                    // Small delay before restarting camera
-                    setTimeout(async () => {
-                        try {
-                            await startCamera(currentFacingMode);
-                        } catch (error) {
-                            console.error('Error restarting camera:', error);
-                            showStatus('Error restarting camera. Please refresh the page.', 5000);
-                        }
-                    }, 100);
-                    
-                } catch (error) {
-                    console.error('Upload failed:', error);
-                    showStatus('Upload failed. Please try again.', 5000);
-                } finally {
-                    uploadBtn.disabled = false;
-                    uploadBtn.classList.remove('loading');
+        // Improved video recording
+        function toggleRecording() {
+            if (isProcessing) return;
+            isProcessing = true;
+            
+            try {
+                const recordButton = document.getElementById('recordButton');
+                
+                if (!currentStream) {
+                    throw new Error('Camera not ready');
                 }
+
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                    recordedChunks = [];
+                    mediaRecorder = new MediaRecorder(currentStream, {
+                        mimeType: 'video/webm;codecs=vp8,opus'
+                    });
+                    
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) {
+                            recordedChunks.push(e.data);
+                        }
+                    };
+                    
+                    mediaRecorder.onstop = () => {
+                        try {
+                            if (recordedChunks.length === 0) {
+                                throw new Error('No video data recorded');
+                            }
+                            
+                            videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                            const videoPreview = document.getElementById('videoPreview');
+                            videoPreview.src = URL.createObjectURL(videoBlob);
+                            videoPreview.style.display = 'block';
+                            document.getElementById('upload').style.display = 'block';
+                        } catch (error) {
+                            console.error('Error processing recording:', error);
+                            showStatus('Failed to process recording');
+                        }
+                    };
+                    
+                    mediaRecorder.start();
+                    recordButton.textContent = 'Stop Recording';
+                    recordButton.classList.add('recording');
+                    
+                } else {
+                    mediaRecorder.stop();
+                    recordButton.textContent = 'Record Video';
+                    recordButton.classList.remove('recording');
+                }
+            } catch (error) {
+                console.error('Error toggling recording:', error);
+                showStatus('Failed to toggle recording');
+            } finally {
+                isProcessing = false;
             }
-        });
+        }
 
         function handleVideoError(error) {
             console.error('Video error:', error);
@@ -531,123 +625,6 @@
             document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
             document.getElementById('zoomSlider').value = zoomLevel;
         }
-
-        async function initializeCamera() {
-            try {
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: currentFacingMode,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                });
-                
-                const video = document.getElementById('camera');
-                video.srcObject = stream;
-                currentStream = stream;
-                
-                // Initialize flash capability
-                const track = stream.getVideoTracks()[0];
-                const capabilities = track.getCapabilities();
-                
-                // Show/hide flash button based on capability
-                const flashButton = document.getElementById('flashButton');
-                flashButton.style.display = capabilities.torch ? 'block' : 'none';
-                
-                await video.play();
-            } catch (error) {
-                console.error('Error accessing camera:', error);
-                alert('Error accessing camera. Please check permissions.');
-            }
-        }
-
-        // Update your toggleFlash function
-        async function toggleFlash() {
-            if (!currentStream) return;
-            
-            const track = currentStream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities();
-            
-            if (!capabilities.torch) {
-                alert('Flash not supported on this device');
-                return;
-            }
-            
-            isFlashOn = !isFlashOn;
-            try {
-                await track.applyConstraints({
-                    advanced: [{ torch: isFlashOn }]
-                });
-                document.getElementById('flashButton').classList.toggle('active', isFlashOn);
-            } catch (error) {
-                console.error('Error toggling flash:', error);
-                alert('Error toggling flash');
-            }
-        }
-
-        // Initialize everything when the page loads
-        document.addEventListener('DOMContentLoaded', async () => {
-            await initializeCamera();
-            
-            // Add event listeners for all controls
-            document.getElementById('flashButton').addEventListener('click', toggleFlash);
-            document.getElementById('switchCamera').addEventListener('click', async () => {
-                currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-                await initializeCamera();
-            });
-            
-            // Add zoom control listeners
-            document.querySelectorAll('.zoom-button').forEach(button => {
-                button.addEventListener('click', () => {
-                    const zoom = parseFloat(button.dataset.zoom);
-                    setZoom(zoom);
-                });
-            });
-            
-            document.getElementById('zoomSlider').addEventListener('input', (e) => {
-                setZoom(parseFloat(e.target.value));
-            });
-        });
-
-        // Add this function to handle responsive layout
-        function adjustLayout() {
-            const root = document.documentElement;
-            const windowHeight = window.innerHeight;
-            const windowWidth = window.innerWidth;
-            
-            // Adjust camera height based on screen size
-            if (windowHeight < 600) {
-                root.style.setProperty('--camera-height', '50vh');
-                root.style.setProperty('--button-spacing', '8px');
-            } else if (windowHeight < 800) {
-                root.style.setProperty('--camera-height', '60vh');
-                root.style.setProperty('--button-spacing', '10px');
-            } else {
-                root.style.setProperty('--camera-height', '65vh');
-                root.style.setProperty('--button-spacing', '12px');
-            }
-
-            // Adjust for different screen widths
-            if (windowWidth < 360) {
-                root.style.setProperty('--control-size', '35px');
-            } else {
-                root.style.setProperty('--control-size', '40px');
-            }
-        }
-
-        // Call on load and resize
-        window.addEventListener('load', adjustLayout);
-        window.addEventListener('resize', adjustLayout);
-        window.addEventListener('orientationchange', () => {
-            // Small delay to ensure orientation change is complete
-            setTimeout(adjustLayout, 100);
-        });
-
-        // Add to your existing DOMContentLoaded event
-        document.addEventListener('DOMContentLoaded', () => {
-            adjustLayout();
-            // ... your existing initialization code ...
-        });
     </script>
     <script src="drive-upload.js"></script>
 </body>

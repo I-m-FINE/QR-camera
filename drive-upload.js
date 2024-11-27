@@ -1,4 +1,4 @@
-// Remove all direct declarations and use a namespace
+// Remove all config declarations and use the global config
 window.googleApi = {
     state: {
         tokenClient: null,
@@ -7,24 +7,20 @@ window.googleApi = {
     }
 };
 
-// Initialize Google API
 window.initGoogleApi = async function() {
     try {
-        // Load the API client
         await new Promise((resolve) => {
             gapi.load('client', resolve);
         });
 
-        // Initialize the client
         await gapi.client.init({
-            apiKey: 'AIzaSyCiSB89a73LV0jvQJca2B6lx2slwgNFX6I',
-            discoveryDocs: ['https://www.googleapis.com/discovery/v1/apis/drive/v3/rest'],
+            apiKey: window.googleApiConfig.API_KEY,
+            discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
         });
 
-        // Initialize token client
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: 'http://997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com', // Replace with your actual client ID
-            scope: 'https://www.googleapis.com/auth/drive.file',
+            client_id: window.googleApiConfig.CLIENT_ID,
+            scope: window.googleApiConfig.SCOPES,
             callback: '', // Will be set during upload
         });
 

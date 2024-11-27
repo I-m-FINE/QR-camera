@@ -257,6 +257,7 @@
         let recordedChunks = [];
         let currentFacingMode = 'environment'; // Track current camera
         let currentZoom = 1;
+        let currentStream = null;
 
         async function startCamera(facingMode = 'environment') {
             try {
@@ -271,20 +272,41 @@
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1920 },
-                        height: { ideal: 1080 }
+                        height: { ideal: 1080 },
+                        zoom: true  // Request zoom capability
                     },
                     audio: false
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
+                currentStream = stream;  // Store the stream reference
                 currentFacingMode = facingMode;
 
-                // After getting the stream, set the zoom level
+                // Initialize zoom capabilities
                 const track = stream.getVideoTracks()[0];
                 const capabilities = track.getCapabilities();
+                const settings = track.getSettings();
+
+                // Update zoom controls based on device capabilities
+                const zoomSlider = document.getElementById('zoomSlider');
+                const zoomControls = document.querySelector('.zoom-controls');
+
                 if (capabilities.zoom) {
+                    zoomControls.style.display = 'flex';
+                    zoomSlider.min = capabilities.zoom.min;
+                    zoomSlider.max = capabilities.zoom.max;
+                    zoomSlider.value = settings.zoom || 1;
+                    zoomSlider.step = (capabilities.zoom.max - capabilities.zoom.min) / 100;
+                    
+                    // Update current zoom display
+                    document.getElementById('zoomLevel').textContent = `${(settings.zoom || 1).toFixed(1)}x`;
+                    
+                    // Set initial zoom level
                     await setZoom(currentZoom);
+                } else {
+                    zoomControls.style.display = 'none';
+                    console.log('Zoom is not supported on this device');
                 }
 
                 // Return promise for when video is ready
@@ -294,14 +316,14 @@
                             .then(resolve)
                             .catch(error => {
                                 console.error('Error playing video:', error);
-                                resolve(); // Resolve anyway to prevent hanging
+                                resolve();
                             });
                     };
                 });
             } catch (err) {
                 console.error('Error accessing camera:', err);
                 showStatus('Unable to access camera. Please check permissions.', 5000);
-                throw err; // Propagate error for handling
+                throw err;
             }
         }
 
@@ -349,30 +371,19 @@
 
             // Add zoom controls event listeners
             document.querySelectorAll('.zoom-button').forEach(button => {
-                button.addEventListener('click', () => {
+                button.addEventListener('click', async () => {
                     const zoomLevel = parseFloat(button.dataset.zoom);
-                    setZoom(zoomLevel);
+                    console.log('Zoom button clicked:', zoomLevel); // Debug log
+                    await setZoom(zoomLevel);
                 });
             });
 
             const zoomSlider = document.getElementById('zoomSlider');
-            zoomSlider.addEventListener('input', (e) => {
-                setZoom(parseFloat(e.target.value));
+            zoomSlider.addEventListener('input', async (e) => {
+                const zoomLevel = parseFloat(e.target.value);
+                console.log('Slider value changed:', zoomLevel); // Debug log
+                await setZoom(zoomLevel);
             });
-
-            // Initialize camera capabilities after starting the camera
-            await startCamera();
-            const video = document.getElementById('camera');
-            const track = video.srcObject?.getVideoTracks()[0];
-            if (track) {
-                const capabilities = track.getCapabilities();
-                if (capabilities.zoom) {
-                    const zoomSlider = document.getElementById('zoomSlider');
-                    zoomSlider.min = capabilities.zoom.min;
-                    zoomSlider.max = capabilities.zoom.max;
-                    zoomSlider.value = currentZoom;
-                }
-            }
         });
 
         // Update capture function for better iOS compatibility
@@ -535,12 +546,11 @@
         }
 
         async function setZoom(zoomLevel) {
-            const video = document.getElementById('camera');
-            const stream = video.srcObject;
-            
-            if (!stream) return;
+            if (!currentStream) return;
 
-            const track = stream.getVideoTracks()[0];
+            const track = currentStream.getVideoTracks()[0];
+            if (!track) return;
+
             const capabilities = track.getCapabilities();
             
             // Check if zoom is supported
@@ -549,17 +559,22 @@
                 return;
             }
 
+            // Ensure zoom level is within valid range
             zoomLevel = Math.min(Math.max(zoomLevel, capabilities.zoom.min), capabilities.zoom.max);
             
             try {
-                await track.applyConstraints({
-                    advanced: [{ zoom: zoomLevel }]
-                });
+                const constraints = {
+                    advanced: [{zoom: zoomLevel}]
+                };
+                
+                await track.applyConstraints(constraints);
                 currentZoom = zoomLevel;
                 
                 // Update UI
                 document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
                 document.getElementById('zoomSlider').value = zoomLevel;
+                
+                console.log('Zoom set to:', zoomLevel); // Debug log
             } catch (error) {
                 console.error('Error setting zoom:', error);
             }

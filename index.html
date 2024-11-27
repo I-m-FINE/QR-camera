@@ -289,9 +289,10 @@
     <div class="container">
         <h1>Camera Upload</h1>
         <div class="camera-container">
-            <video id="camera" autoplay playsinline muted disablePictureInPicture style="transform: scaleX(1);" onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
-            <img id="preview" alt="Preview">
-            <video id="videoPreview" controls></video>
+            <video id="camera" autoplay playsinline></video>
+            <button id="previewButton" class="preview-button" style="display: none;">
+                <img id="previewThumbnail" alt="Preview">
+            </button>
             <div class="camera-controls top-controls">
                 <button class="control-button" id="flashButton">
                     <i class="fas fa-bolt"></i>
@@ -426,11 +427,11 @@
         }
 
         async function startCamera() {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-
             try {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
                 const constraints = {
                     video: {
                         facingMode: currentFacingMode,
@@ -440,27 +441,32 @@
                     audio: false
                 };
 
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 const video = document.getElementById('camera');
-                video.srcObject = stream;
-                currentStream = stream;
+                
+                if (!video) {
+                    throw new Error('Camera element not found');
+                }
 
-                // Wait for video to be ready before playing
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = async () => {
-                        try {
-                            await video.play();
-                            resolve();
-                        } catch (error) {
-                            console.error('Play error:', error);
-                            resolve(); // Continue even if play fails
-                        }
+                video.srcObject = currentStream;
+
+                // Wait for video to be ready
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        video.play()
+                            .then(resolve)
+                            .catch(reject);
                     };
+                    video.onerror = reject;
                 });
+
+                console.log('Camera started successfully');
+                return true;
 
             } catch (error) {
                 console.error('Camera start error:', error);
-                showStatus('Camera access failed');
+                showStatus('Camera access failed: ' + error.message);
+                return false;
             }
         }
 
@@ -706,50 +712,52 @@
         // Simplified capture photo function with better button handling
         async function capturePhoto() {
             if (isProcessing) return;
-            
-            const captureButton = document.getElementById('capture');
-            if (!captureButton) return;
-            
+            isProcessing = true;
+
             try {
-                isProcessing = true;
-                captureButton.disabled = true;
-                
                 const video = document.getElementById('camera');
-                if (!video || !video.srcObject) {
+                if (!video || !video.srcObject || !video.readyState === video.HAVE_ENOUGH_DATA) {
                     throw new Error('Camera not ready');
                 }
 
-                // Ensure video is playing and has valid dimensions
-                if (video.videoWidth === 0 || video.videoHeight === 0) {
-                    await new Promise((resolve) => setTimeout(resolve, 1000));
+                // Show visual feedback
+                const shutterOverlay = document.querySelector('.shutter-overlay');
+                if (shutterOverlay) {
+                    shutterOverlay.classList.add('shutter-animation');
                 }
 
+                // Create canvas and capture image
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
                 
                 const context = canvas.getContext('2d');
                 context.drawImage(video, 0, 0);
-                
+
+                // Convert to blob
                 const blob = await new Promise((resolve) => {
                     canvas.toBlob(resolve, 'image/jpeg', 0.8);
                 });
-                
+
                 if (!blob) {
                     throw new Error('Failed to create image');
                 }
 
+                // Update preview
+                await updatePreviewButton(blob);
                 lastCaptureBlob = blob;
-                updatePreviewButton(blob);
                 showStatus('Photo captured!');
 
             } catch (error) {
-                console.error('Capture error:', error);
-                showStatus('Failed to take photo');
+                console.error('Error capturing photo:', error);
+                showStatus('Failed to capture photo: ' + error.message);
             } finally {
                 isProcessing = false;
-                if (captureButton) {
-                    captureButton.disabled = false;
+                const shutterOverlay = document.querySelector('.shutter-overlay');
+                if (shutterOverlay) {
+                    setTimeout(() => {
+                        shutterOverlay.classList.remove('shutter-animation');
+                    }, 500);
                 }
             }
         }
@@ -789,27 +797,44 @@
             }
         }
 
-        // Update preview button
-        function updatePreviewButton(blob) {
-            try {
-                const previewButton = document.getElementById('previewButton');
-                const previewThumbnail = document.getElementById('previewThumbnail');
-                
-                if (previewButton && previewThumbnail && blob) {
-                    const url = URL.createObjectURL(blob);
-                    previewThumbnail.src = url;
-                    previewButton.style.display = 'block';
+        // Fix the preview button update function
+        async function updatePreviewButton(blob) {
+            return new Promise((resolve, reject) => {
+                try {
+                    const previewButton = document.getElementById('previewButton');
+                    const previewThumbnail = document.getElementById('previewThumbnail');
                     
-                    // Clean up old URLs
+                    if (!previewButton || !previewThumbnail || !blob) {
+                        throw new Error('Missing elements for preview update');
+                    }
+
+                    // Create thumbnail
+                    const url = URL.createObjectURL(blob);
+                    
+                    // Set up image load handler
+                    previewThumbnail.onload = () => {
+                        previewButton.style.display = 'block';
+                        resolve();
+                    };
+                    
+                    previewThumbnail.onerror = () => {
+                        reject(new Error('Failed to load preview image'));
+                    };
+
+                    // Set the source
+                    previewThumbnail.src = url;
+
+                    // Clean up old URL
                     const oldUrl = previewThumbnail.dataset.blobUrl;
                     if (oldUrl) {
                         URL.revokeObjectURL(oldUrl);
                     }
                     previewThumbnail.dataset.blobUrl = url;
+
+                } catch (error) {
+                    reject(error);
                 }
-            } catch (error) {
-                console.error('Preview update error:', error);
-            }
+            });
         }
 
         // Updated upload function

@@ -737,7 +737,6 @@
             isProcessing = true;
             
             try {
-                // Visual feedback
                 const shutterOverlay = document.querySelector('.shutter-overlay');
                 shutterOverlay.classList.add('shutter-animation');
                 showStatus('Taking photo...');
@@ -755,12 +754,7 @@
                 }
 
                 lastCaptureBlob = blob;
-                
-                // Show preview and upload button
                 updatePreviewButton(blob);
-                document.getElementById('upload').style.display = 'block';
-                
-                // Automatic upload
                 await uploadToGoogleDrive(blob, 'image');
                 
                 showStatus('Photo captured and uploaded!');
@@ -771,49 +765,18 @@
             } finally {
                 isProcessing = false;
                 setTimeout(() => {
-                    document.querySelector('.shutter-overlay').classList.remove('shutter-animation');
+                    shutterOverlay.classList.remove('shutter-animation');
                 }, 500);
-            }
-        }
-
-        function updatePreviewButton(blob) {
-            const previewButton = document.getElementById('previewButton');
-            const previewThumbnail = document.getElementById('previewThumbnail');
-            previewThumbnail.src = URL.createObjectURL(blob);
-            previewButton.style.display = 'block';
-        }
-
-        function togglePreview() {
-            const preview = document.getElementById('preview');
-            const videoPreview = document.getElementById('videoPreview');
-            
-            if (isPreviewVisible) {
-                preview.style.display = 'none';
-                videoPreview.style.display = 'none';
-                isPreviewVisible = false;
-            } else {
-                if (lastCaptureBlob.type.startsWith('image/')) {
-                    preview.src = URL.createObjectURL(lastCaptureBlob);
-                    preview.style.display = 'block';
-                    videoPreview.style.display = 'none';
-                } else {
-                    videoPreview.src = URL.createObjectURL(lastCaptureBlob);
-                    videoPreview.style.display = 'block';
-                    preview.style.display = 'none';
-                }
-                isPreviewVisible = true;
             }
         }
 
         // Record video
         async function toggleRecording() {
             if (isProcessing) return;
-            isProcessing = true;
             
             const recordButton = document.getElementById('recordButton');
             
             if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                // Start recording
                 recordedChunks = [];
                 mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8,opus' });
                 
@@ -825,7 +788,6 @@
                     const blob = new Blob(recordedChunks, { type: 'video/webm' });
                     lastCaptureBlob = blob;
                     updatePreviewButton(blob);
-                    document.getElementById('upload').style.display = 'block';
                     await uploadToGoogleDrive(blob, 'video');
                     showStatus('Video recorded and uploaded!');
                 };
@@ -836,12 +798,19 @@
                 showStatus('Recording started...');
                 
             } else {
-                // Stop recording
                 mediaRecorder.stop();
                 recordButton.textContent = 'Record Video';
                 recordButton.classList.remove('recording');
                 showStatus('Recording stopped');
             }
+        }
+
+        // Update preview button
+        function updatePreviewButton(blob) {
+            const previewButton = document.getElementById('previewButton');
+            const previewThumbnail = document.getElementById('previewThumbnail');
+            previewThumbnail.src = URL.createObjectURL(blob);
+            previewButton.style.display = 'block';
         }
 
         // Updated upload function
@@ -957,6 +926,12 @@
             document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
             document.getElementById('zoomSlider').value = zoomLevel;
         }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('capture').addEventListener('click', capturePhoto);
+            document.getElementById('recordButton').addEventListener('click', toggleRecording);
+        });
     </script>
     <script src="drive-upload.js"></script>
 </body>

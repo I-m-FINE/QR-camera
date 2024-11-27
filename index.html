@@ -44,6 +44,7 @@
         <h1>Camera Upload</h1>
         <video id="camera" autoplay playsinline onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
         <div>
+            <button id="switchCamera" class="button">Switch Camera</button>
             <button id="capture" class="button">Take Photo</button>
             <button id="recordButton" class="button">Record Video</button>
             <button id="upload" class="button" style="display:none;">Upload to Drive</button>
@@ -57,25 +58,92 @@
         let videoBlob = null;
         let mediaRecorder = null;
         let recordedChunks = [];
+        let currentFacingMode = 'environment'; // Track current camera
 
-        async function startCamera() {
+        async function startCamera(facingMode = 'environment') {
             try {
-                const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: 'environment' } // Use back camera on phones
-                });
+                // Stop any existing stream
                 const video = document.getElementById('camera');
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { facingMode: facingMode }
+                });
                 video.srcObject = stream;
+                currentFacingMode = facingMode;
             } catch (err) {
                 console.error('Error accessing camera:', err);
                 alert('Unable to access camera. Please make sure you have given permission.');
             }
         }
 
+        // Add switch camera button handler
+        document.getElementById('switchCamera').addEventListener('click', async () => {
+            // Toggle between front and back camera
+            const newMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            
+            // Stop recording if active
+            if (mediaRecorder && mediaRecorder.state === 'recording') {
+                mediaRecorder.stop();
+                const recordBtn = document.getElementById('recordButton');
+                recordBtn.textContent = 'Record Video';
+                recordBtn.classList.remove('recording');
+            }
+
+            try {
+                await startCamera(newMode);
+            } catch (error) {
+                console.error('Error switching camera:', error);
+                alert('Failed to switch camera. Your device might only have one camera.');
+            }
+        });
+
+        // Update the record button handler to use the current stream
+        document.getElementById('recordButton').addEventListener('click', () => {
+            const recordBtn = document.getElementById('recordButton');
+            const video = document.getElementById('camera');
+            const uploadBtn = document.getElementById('upload');
+            const preview = document.getElementById('preview');
+            
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                // Clear previous recording
+                videoBlob = null;
+                imageBlob = null;
+                recordedChunks = [];
+                preview.style.display = 'none';
+                uploadBtn.style.display = 'none';
+                
+                // Start recording with current stream
+                mediaRecorder = new MediaRecorder(video.srcObject);
+                mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+                mediaRecorder.onstop = () => {
+                    videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                    preview.src = URL.createObjectURL(videoBlob);
+                    preview.style.display = 'block';
+                    uploadBtn.style.display = 'inline-block';
+                };
+                mediaRecorder.start();
+                recordBtn.textContent = 'Stop Recording';
+                recordBtn.classList.add('recording');
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                recordBtn.textContent = 'Record Video';
+                recordBtn.classList.remove('recording');
+            }
+        });
+
         document.getElementById('capture').addEventListener('click', () => {
             const video = document.getElementById('camera');
             const canvas = document.getElementById('canvas');
             const preview = document.getElementById('preview');
             const uploadBtn = document.getElementById('upload');
+
+            // Clear previous recording/capture
+            videoBlob = null;
+            recordedChunks = [];
 
             // Set canvas size to match video
             canvas.width = video.videoWidth;
@@ -91,34 +159,6 @@
                 preview.style.display = 'block';
                 uploadBtn.style.display = 'inline-block';
             }, 'image/jpeg', 0.8);
-        });
-
-        document.getElementById('recordButton').addEventListener('click', () => {
-            const recordBtn = document.getElementById('recordButton');
-            const video = document.getElementById('camera');
-            const uploadBtn = document.getElementById('upload');
-            
-            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                // Start recording
-                recordedChunks = [];
-                mediaRecorder = new MediaRecorder(video.srcObject);
-                mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
-                mediaRecorder.onstop = () => {
-                    videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const preview = document.getElementById('preview');
-                    preview.src = URL.createObjectURL(videoBlob);
-                    preview.style.display = 'block';
-                    uploadBtn.style.display = 'inline-block';
-                };
-                mediaRecorder.start();
-                recordBtn.textContent = 'Stop Recording';
-                recordBtn.classList.add('recording');
-            } else {
-                // Stop recording
-                mediaRecorder.stop();
-                recordBtn.textContent = 'Record Video';
-                recordBtn.classList.remove('recording');
-            }
         });
 
         document.getElementById('upload').addEventListener('click', async () => {
@@ -140,6 +180,7 @@
             }
         });
 
+        // Initial camera start
         startCamera();
 
         function handleVideoError(error) {

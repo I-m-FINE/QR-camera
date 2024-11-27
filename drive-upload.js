@@ -9,19 +9,24 @@ window.googleApi = {
 
 window.initGoogleApi = async function() {
     try {
+        // First, load the client
         await new Promise((resolve) => {
-            gapi.load('client', resolve);
+            gapi.load('client:auth2', resolve);
         });
 
+        // Initialize the client
         await gapi.client.init({
             apiKey: window.googleApiConfig.API_KEY,
+            clientId: window.googleApiConfig.CLIENT_ID,
             discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
+            scope: window.googleApiConfig.SCOPES
         });
 
+        // Initialize token client
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: window.googleApiConfig.CLIENT_ID,
             scope: window.googleApiConfig.SCOPES,
-            callback: '', // Will be set during upload
+            callback: '', // Will be set later
         });
 
         window.googleApi.state.gapiInited = true;
@@ -44,32 +49,37 @@ window.uploadToGoogleDrive = async function(blob, type) {
 
         showStatus('Starting upload...');
 
-        // Request authentication first
-        await new Promise((resolve, reject) => {
-            try {
-                if (!window.googleApi.state.tokenClient) {
-                    reject(new Error('Token client not initialized'));
-                    return;
-                }
-
-                window.googleApi.state.tokenClient.callback = (response) => {
-                    if (response.error) {
-                        reject(response);
-                    } else {
-                        resolve(response);
+        // Get auth instance
+        const authInstance = gapi.auth2.getAuthInstance();
+        
+        // Check if user is signed in
+        if (!authInstance.isSignedIn.get()) {
+            // Request authentication
+            await new Promise((resolve, reject) => {
+                try {
+                    if (!window.googleApi.state.tokenClient) {
+                        reject(new Error('Token client not initialized'));
+                        return;
                     }
-                };
 
-                // Always request consent to ensure we have a valid token
-                window.googleApi.state.tokenClient.requestAccessToken({
-                    prompt: 'consent'
-                });
-            } catch (err) {
-                reject(err);
-            }
-        });
+                    window.googleApi.state.tokenClient.callback = (response) => {
+                        if (response.error) {
+                            reject(response);
+                        } else {
+                            resolve(response);
+                        }
+                    };
 
-        // Now proceed with upload after authentication
+                    window.googleApi.state.tokenClient.requestAccessToken({
+                        prompt: 'consent'
+                    });
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
+        // Now proceed with upload
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
 
@@ -81,14 +91,17 @@ window.uploadToGoogleDrive = async function(blob, type) {
             reader.readAsDataURL(blob);
         });
 
-        // Create file on Google Drive
+        // Create file metadata
+        const metadata = {
+            name: fileName,
+            mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
+        };
+
+        // Upload file
         const response = await gapi.client.drive.files.create({
-            resource: {
-                name: fileName,
-                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
-            },
+            resource: metadata,
             media: {
-                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
+                mimeType: metadata.mimeType,
                 body: base64Data
             },
             fields: 'id,webViewLink'

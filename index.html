@@ -193,13 +193,66 @@
             display: none;
             z-index: 1000;
         }
+
+        /* Shutter animation overlay */
+        .shutter-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #fff;
+            opacity: 0;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        /* Shutter animation */
+        @keyframes shutterAnimation {
+            0% { opacity: 0; }
+            5% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+
+        .shutter-animation {
+            animation: shutterAnimation 0.5s ease-out;
+        }
+
+        /* Optional: Add a focus frame animation */
+        .focus-frame {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 80px;
+            height: 80px;
+            border: 2px solid #fff;
+            border-radius: 50%;
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        @keyframes focusFrameAnimation {
+            0% { 
+                opacity: 1;
+                transform: translate(-50%, -50%) scale(1.5);
+            }
+            100% { 
+                opacity: 0;
+                transform: translate(-50%, -50%) scale(0.8);
+            }
+        }
+
+        .focus-animation {
+            animation: focusFrameAnimation 0.3s ease-out;
+        }
     </style>
 </head>
 <body>
     <div class="container">
         <h1>Camera Upload</h1>
         <div class="camera-container">
-            <video id="camera" autoplay playsinline></video>
+            <video id="camera" autoplay playsinline muted disablePictureInPicture style="transform: scaleX(1);" onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
             <img id="preview" alt="Preview">
             <video id="videoPreview" controls></video>
             <div class="camera-controls top-controls">
@@ -264,7 +317,7 @@
         let videoBlob = null;
         let mediaRecorder = null;
         let recordedChunks = [];
-        let currentFacingMode = 'environment'; // Track current camera
+        let currentFacingMode = 'environment'; // Start with rear camera
         let currentZoom = 1;
         let currentStream = null;
         let isFlashOn = false;

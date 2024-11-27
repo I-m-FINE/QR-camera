@@ -1,79 +1,89 @@
-// Google OAuth2 configuration
-const CLIENT_ID = '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com';
+// Google API configuration
+const CLIENT_ID = 'http://997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com';
+const API_KEY = 'AIzaSyCiSB89a73LV0jvQJca2B6lx2slwgNFX6I';
+const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
-const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 
-let accessToken = null;
+let tokenClient;
+let gapiInited = false;
+let gisInited = false;
 
-// Initialize Google Sign-in when page loads
-document.addEventListener('DOMContentLoaded', async () => {
-    // Load Google Identity Services
+async function initializeGoogleAPI() {
     await new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.defer = true;
-        script.onload = resolve;
-        document.body.appendChild(script);
+        gapi.load('client', async () => {
+            await gapi.client.init({
+                apiKey: API_KEY,
+                discoveryDocs: [DISCOVERY_DOC],
+            });
+            gapiInited = true;
+            resolve();
+        });
     });
 
-    // Initialize token client
-    const client = google.accounts.oauth2.initTokenClient({
+    tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: SCOPES,
-        callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-                accessToken = tokenResponse.access_token;
-                console.log('Successfully authenticated with Google Drive');
-            }
-        },
+        callback: '', // defined at request time
     });
-
-    // Request token immediately
-    client.requestAccessToken();
-});
-
-async function uploadToDrive(blob, type = 'image') {
-    try {
-        if (!accessToken) {
-            throw new Error('Not authenticated with Google Drive');
-        }
-        return await performUpload(blob, type, accessToken);
-    } catch (error) {
-        console.error('Error:', error);
-        throw error;
-    }
+    gisInited = true;
 }
 
-async function performUpload(blob, type, token) {
-    const timestamp = new Date().getTime();
-    const fileExtension = type === 'video' ? '.webm' : '.jpg';
-    const mimeType = type === 'video' ? 'video/webm' : 'image/jpeg';
-    const fileName = `${type}_${timestamp}${fileExtension}`;
-    
-    const metadata = {
-        name: fileName,
-        mimeType: mimeType,
-        parents: [FOLDER_ID]
-    };
+async function uploadToGoogleDrive(blob, type) {
+    try {
+        showStatus('Starting upload...');
 
-    const form = new FormData();
-    form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-    form.append('file', blob);
+        // Check if we need to authenticate
+        if (!gapi.client.getToken()) {
+            // Request authentication
+            await new Promise((resolve, reject) => {
+                try {
+                    tokenClient.callback = async (resp) => {
+                        if (resp.error !== undefined) {
+                            reject(resp);
+                            return;
+                        }
+                        resolve(resp);
+                    };
+                    tokenClient.requestAccessToken({ prompt: 'consent' });
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
 
-    const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-        method: 'POST',
-        headers: {
-            'Authorization': `Bearer ${token}`,
-        },
-        body: form
-    });
+        // Proceed with upload
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
 
-    if (!response.ok) {
-        throw new Error(`Upload failed: ${response.status}`);
+        // Convert blob to base64
+        const base64Data = await new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onloadend = () => resolve(reader.result.split(',')[1]);
+            reader.onerror = reject;
+            reader.readAsDataURL(blob);
+        });
+
+        const metadata = {
+            name: fileName,
+            mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
+        };
+
+        const response = await gapi.client.drive.files.create({
+            resource: metadata,
+            media: {
+                mimeType: metadata.mimeType,
+                body: base64Data
+            },
+            fields: 'id,webViewLink'
+        });
+
+        console.log('File uploaded successfully:', response.result.webViewLink);
+        showStatus('Upload successful!');
+        return response.result;
+
+    } catch (error) {
+        console.error('Upload error:', error);
+        showStatus('Upload failed. Please try again.');
+        throw error;
     }
-
-    const result = await response.json();
-    alert(`${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully!`);
-    return result;
 }

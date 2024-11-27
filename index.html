@@ -377,8 +377,6 @@
         let isPreviewVisible = false;
 
         // Google Drive API configuration
-        const CLIENT_ID = 'YOUR_CLIENT_ID';
-        const API_KEY = 'YOUR_API_KEY';
         const DISCOVERY_DOC = 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest';
         const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 
@@ -393,7 +391,6 @@
 
         async function initializeGapiClient() {
             await gapi.client.init({
-                apiKey: API_KEY,
                 discoveryDocs: [DISCOVERY_DOC],
             });
             gapiInited = true;
@@ -402,7 +399,6 @@
 
         function gisLoaded() {
             tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
                 scope: SCOPES,
                 callback: '', // defined later
             });
@@ -716,7 +712,7 @@
 
             try {
                 const video = document.getElementById('camera');
-                if (!video || !video.srcObject || !video.readyState === video.HAVE_ENOUGH_DATA) {
+                if (!video || !video.srcObject) {
                     throw new Error('Camera not ready');
                 }
 
@@ -726,7 +722,7 @@
                     shutterOverlay.classList.add('shutter-animation');
                 }
 
-                // Create canvas and capture image
+                // Capture the photo
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
@@ -743,10 +739,17 @@
                     throw new Error('Failed to create image');
                 }
 
-                // Update preview
-                await updatePreviewButton(blob);
+                // Update preview and upload
                 lastCaptureBlob = blob;
-                showStatus('Photo captured!');
+                await updatePreviewButton(blob);
+                
+                // Check if Google API is ready
+                if (typeof gapi !== 'undefined' && gapi.client) {
+                    await uploadToGoogleDrive(blob, 'image');
+                } else {
+                    showStatus('Google Drive API not ready');
+                    console.error('Google Drive API not initialized');
+                }
 
             } catch (error) {
                 console.error('Error capturing photo:', error);
@@ -769,31 +772,43 @@
             const recordButton = document.getElementById('recordButton');
             
             if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                recordedChunks = [];
-                mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8,opus' });
-                
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) recordedChunks.push(e.data);
-                };
-                
-                mediaRecorder.onstop = async () => {
-                    try {
-                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                        lastCaptureBlob = blob;
-                        updatePreviewButton(blob);
-                        showStatus('Uploading video...');
-                        await uploadToGoogleDrive(blob, 'video');
-                    } catch (error) {
-                        console.error('Video processing error:', error);
-                        showStatus('Failed to process video');
-                    }
-                };
-                
-                mediaRecorder.start();
-                recordButton.textContent = 'Stop Recording';
-                recordButton.classList.add('recording');
-                showStatus('Recording started...');
-                
+                try {
+                    recordedChunks = [];
+                    mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8,opus' });
+                    
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) recordedChunks.push(e.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        try {
+                            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                            lastCaptureBlob = blob;
+                            await updatePreviewButton(blob);
+                            showStatus('Processing video...');
+                            
+                            // Check if Google API is ready
+                            if (typeof gapi !== 'undefined' && gapi.client) {
+                                await uploadToGoogleDrive(blob, 'video');
+                            } else {
+                                showStatus('Google Drive API not ready');
+                                console.error('Google Drive API not initialized');
+                            }
+                        } catch (error) {
+                            console.error('Video processing error:', error);
+                            showStatus('Failed to process video');
+                        }
+                    };
+                    
+                    mediaRecorder.start();
+                    recordButton.textContent = 'Stop Recording';
+                    recordButton.classList.add('recording');
+                    showStatus('Recording started...');
+                    
+                } catch (error) {
+                    console.error('Failed to start recording:', error);
+                    showStatus('Failed to start recording');
+                }
             } else {
                 mediaRecorder.stop();
                 recordButton.textContent = 'Record Video';
@@ -802,44 +817,33 @@
             }
         }
 
-        // Fix the preview button update function
+        // Fixed preview button update function
         async function updatePreviewButton(blob) {
-            return new Promise((resolve, reject) => {
-                try {
-                    const previewButton = document.getElementById('previewButton');
-                    const previewThumbnail = document.getElementById('previewThumbnail');
-                    
-                    if (!previewButton || !previewThumbnail || !blob) {
-                        throw new Error('Missing elements for preview update');
-                    }
-
-                    // Create thumbnail
-                    const url = URL.createObjectURL(blob);
-                    
-                    // Set up image load handler
-                    previewThumbnail.onload = () => {
-                        previewButton.style.display = 'block';
-                        resolve();
-                    };
-                    
-                    previewThumbnail.onerror = () => {
-                        reject(new Error('Failed to load preview image'));
-                    };
-
-                    // Set the source
-                    previewThumbnail.src = url;
-
-                    // Clean up old URL
-                    const oldUrl = previewThumbnail.dataset.blobUrl;
-                    if (oldUrl) {
-                        URL.revokeObjectURL(oldUrl);
-                    }
-                    previewThumbnail.dataset.blobUrl = url;
-
-                } catch (error) {
-                    reject(error);
+            try {
+                const previewButton = document.getElementById('previewButton');
+                const previewThumbnail = document.getElementById('previewThumbnail');
+                
+                if (!previewButton || !previewThumbnail || !blob) {
+                    console.error('Missing elements for preview update');
+                    return;
                 }
-            });
+
+                // Revoke old URL if it exists
+                if (previewThumbnail.dataset.blobUrl) {
+                    URL.revokeObjectURL(previewThumbnail.dataset.blobUrl);
+                }
+
+                // Create new URL
+                const url = URL.createObjectURL(blob);
+                previewThumbnail.dataset.blobUrl = url;
+                
+                // Set new image
+                previewThumbnail.src = url;
+                previewButton.style.display = 'block';
+
+            } catch (error) {
+                console.error('Preview update error:', error);
+            }
         }
 
         // Fixed upload functions

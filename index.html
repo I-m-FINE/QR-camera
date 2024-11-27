@@ -283,6 +283,7 @@
                 document.getElementById('flashButton').classList.remove('active');
                 
                 await startCamera();
+                setZoom(1); // Reset zoom after switching camera
                 showStatus('Camera switched');
             } catch (error) {
                 console.error('Error switching camera:', error);

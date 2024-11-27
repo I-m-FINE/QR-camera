@@ -9,30 +9,23 @@ window.googleApi = {
 
 window.initGoogleApi = async function() {
     try {
-        await new Promise((resolve, reject) => {
-            gapi.load('client:auth2', {
-                callback: resolve,
-                onerror: () => reject('Failed to load GAPI client'),
-                timeout: 5000,
-                ontimeout: () => reject('GAPI client load timeout')
-            });
+        await new Promise((resolve) => {
+            gapi.load('client', resolve);
         });
 
         await gapi.client.init({
             apiKey: window.googleApiConfig.API_KEY,
-            clientId: window.googleApiConfig.CLIENT_ID,
             discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
-            scope: window.googleApiConfig.SCOPES
         });
 
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: window.googleApiConfig.CLIENT_ID,
             scope: window.googleApiConfig.SCOPES,
-            callback: (tokenResponse) => {
-                if (tokenResponse && tokenResponse.access_token) {
-                    window.googleApi.state.accessToken = tokenResponse.access_token;
+            callback: (resp) => {
+                if (resp && resp.access_token) {
+                    window.googleApi.state.accessToken = resp.access_token;
                 }
-            }
+            },
         });
 
         window.googleApi.state.gapiInited = true;
@@ -42,46 +35,36 @@ window.initGoogleApi = async function() {
         return true;
     } catch (error) {
         console.error('Failed to initialize Google API:', error);
-        window.googleApi.state.gapiInited = false;
-        window.googleApi.state.gisInited = false;
         return false;
     }
 };
 
 window.uploadToGoogleDrive = async function(blob, type) {
     try {
-        if (!window.googleApi.state.gapiInited || !window.googleApi.state.gisInited) {
+        if (!window.googleApi.state.gapiInited) {
             await window.initGoogleApi();
         }
 
         showStatus('Starting upload...');
 
-        if (!window.googleApi.state.accessToken) {
-            await new Promise((resolve, reject) => {
-                try {
-                    window.googleApi.state.tokenClient.callback = (response) => {
-                        if (response.error) {
-                            reject(response);
-                        } else {
-                            window.googleApi.state.accessToken = response.access_token;
-                            resolve(response);
-                        }
-                    };
-                    window.googleApi.state.tokenClient.requestAccessToken({
-                        prompt: 'consent'
-                    });
-                } catch (err) {
-                    reject(err);
-                }
-            });
-        }
-
-        gapi.client.setToken({
-            access_token: window.googleApi.state.accessToken
+        await new Promise((resolve, reject) => {
+            try {
+                window.googleApi.state.tokenClient.callback = (resp) => {
+                    if (resp.error) {
+                        reject(resp);
+                    }
+                    window.googleApi.state.accessToken = resp.access_token;
+                    resolve(resp);
+                };
+                window.googleApi.state.tokenClient.requestAccessToken();
+            } catch (err) {
+                reject(err);
+            }
         });
 
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
+        const mimeType = type === 'image' ? 'image/jpeg' : 'video/webm';
 
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
@@ -91,14 +74,8 @@ window.uploadToGoogleDrive = async function(blob, type) {
         });
 
         const response = await gapi.client.drive.files.create({
-            resource: {
-                name: fileName,
-                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
-            },
-            media: {
-                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
-                body: base64Data
-            },
+            resource: { name: fileName, mimeType },
+            media: { mimeType, body: base64Data },
             fields: 'id,webViewLink'
         });
 
@@ -113,12 +90,6 @@ window.uploadToGoogleDrive = async function(blob, type) {
     }
 };
 
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        await window.initGoogleApi();
-    } catch (error) {
-        console.error('Failed to initialize Google API on load:', error);
-    }
-});
+document.addEventListener('DOMContentLoaded', window.initGoogleApi);
 
 console.log('Drive upload script loaded successfully');

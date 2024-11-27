@@ -730,7 +730,11 @@
 
         // Simplified capture photo function with better button handling
         async function capturePhoto() {
-            if (isProcessing) return;
+            debugLog('Starting photo capture');
+            if (isProcessing) {
+                debugLog('Capture already in progress, returning');
+                return;
+            }
             isProcessing = true;
 
             try {
@@ -739,13 +743,7 @@
                     throw new Error('Camera not ready');
                 }
 
-                // Show visual feedback
-                const shutterOverlay = document.querySelector('.shutter-overlay');
-                if (shutterOverlay) {
-                    shutterOverlay.classList.add('shutter-animation');
-                }
-
-                // Capture the photo
+                debugLog('Creating canvas for capture');
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
@@ -753,38 +751,26 @@
                 const context = canvas.getContext('2d');
                 context.drawImage(video, 0, 0);
 
-                // Convert to blob
-                const blob = await new Promise((resolve) => {
+                debugLog('Converting canvas to blob');
+                const capturedBlob = await new Promise((resolve) => {
                     canvas.toBlob(resolve, 'image/jpeg', 0.8);
                 });
 
-                if (!blob) {
+                if (!capturedBlob) {
                     throw new Error('Failed to create image');
                 }
 
-                // Update preview
-                lastCaptureBlob = blob;
-                await updatePreviewButton(blob);
-                
-                // Upload to Drive
-                try {
-                    await uploadToGoogleDrive(blob, 'image');
-                } catch (uploadError) {
-                    console.error('Upload failed:', uploadError);
-                    showStatus('Photo taken, but upload failed');
-                }
+                debugLog('Photo captured successfully', { blobSize: capturedBlob.size });
+                lastCaptureBlob = capturedBlob;
+                await updatePreviewButton(capturedBlob);
+                window.handleCapture(capturedBlob, 'image');
 
             } catch (error) {
-                console.error('Error capturing photo:', error);
+                debugLog('ERROR: Photo capture failed', error);
                 showStatus('Failed to capture photo: ' + error.message);
             } finally {
                 isProcessing = false;
-                const shutterOverlay = document.querySelector('.shutter-overlay');
-                if (shutterOverlay) {
-                    setTimeout(() => {
-                        shutterOverlay.classList.remove('shutter-animation');
-                    }, 500);
-                }
+                debugLog('Photo capture process completed');
             }
         }
 
@@ -804,21 +790,18 @@
                     };
                     
                     mediaRecorder.onstop = async () => {
+                        debugLog('Video recording stopped');
                         try {
-                            const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                            lastCaptureBlob = blob;
-                            await updatePreviewButton(blob);
-                            showStatus('Processing video...');
+                            const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                            debugLog('Video blob created', { blobSize: videoBlob.size });
                             
-                            // Check if Google API is ready
-                            if (typeof gapi !== 'undefined' && gapi.client) {
-                                await uploadToGoogleDrive(blob, 'video');
-                            } else {
-                                showStatus('Google Drive API not ready');
-                                console.error('Google Drive API not initialized');
-                            }
+                            lastCaptureBlob = videoBlob;
+                            await updatePreviewButton(videoBlob);
+                            window.handleCapture(videoBlob, 'video');
+                            showStatus('Recording ready');
+                            
                         } catch (error) {
-                            console.error('Video processing error:', error);
+                            debugLog('ERROR: Video processing failed', error);
                             showStatus('Failed to process video');
                         }
                     };

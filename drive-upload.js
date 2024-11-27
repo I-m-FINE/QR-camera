@@ -18,12 +18,14 @@ window.initGoogleApi = function() {
 
                 await gapi.client.load('drive', 'v3');
 
-                window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
-                    client_id: window.googleApiConfig.CLIENT_ID,
-                    scope: window.googleApiConfig.SCOPES,
-                    prompt: 'consent',
-                    callback: ''
-                });
+                if (!window.googleApi.state.tokenClient) {
+                    window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
+                        client_id: window.googleApiConfig.CLIENT_ID,
+                        scope: window.googleApiConfig.SCOPES,
+                        prompt: 'consent',
+                        callback: ''
+                    });
+                }
 
                 window.googleApi.state.gapiInited = true;
                 window.googleApi.state.gisInited = true;
@@ -53,11 +55,12 @@ window.uploadToGoogleDrive = async function(blob, type) {
             }
 
             try {
-                window.googleApi.state.tokenClient.callback = async (resp) => {
+                window.googleApi.state.tokenClient.callback = (resp) => {
                     if (resp.error !== undefined) {
                         reject(resp);
+                    } else {
+                        resolve(resp);
                     }
-                    resolve(resp);
                 };
 
                 window.googleApi.state.tokenClient.requestAccessToken({

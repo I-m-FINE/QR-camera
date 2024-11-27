@@ -10,49 +10,36 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
-            -webkit-tap-highlight-color: transparent;
+        }
+
+        :root {
+            /* Dynamic variables based on screen size */
+            --camera-height: 60vh;
+            --button-spacing: 10px;
+            --control-size: 40px;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background-color: #1a1a1a;
-            color: #ffffff;
-            min-height: 100vh;
-            min-height: -webkit-fill-available;
-            display: flex;
-            flex-direction: column;
+            background: #000;
+            height: 100vh;
+            height: -webkit-fill-available;
+            overflow: hidden;
         }
 
         .container {
-            width: 100%;
             height: 100vh;
             height: -webkit-fill-available;
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 16px;
-            padding: 16px;
-            position: relative;
-        }
-
-        h1 {
-            font-size: 24px;
-            font-weight: 600;
-            color: #ffffff;
-            text-transform: uppercase;
-            letter-spacing: 1px;
-            margin-bottom: 16px;
         }
 
         .camera-container {
             width: 100%;
-            height: 60vh;
-            flex: 1;
+            height: var(--camera-height);
             position: relative;
-            background-color: #2a2a2a;
             overflow: hidden;
-            border-radius: 16px;
-            margin-bottom: 80px; /* Space for zoom controls */
+            background: #000;
         }
 
         #camera {
@@ -62,68 +49,57 @@
         }
 
         .button-container {
-            width: 100%;
+            position: fixed;
+            left: 50%;
+            transform: translateX(-50%);
+            bottom: calc(var(--button-spacing) * 10);
             display: flex;
             flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            padding: 0 16px;
-            position: absolute;
-            bottom: 100px; /* Position above zoom controls */
+            gap: var(--button-spacing);
+            width: min(90%, 300px);
+            z-index: 10;
         }
 
         .button {
             width: 100%;
-            max-width: 200px;
-            padding: 14px 24px;
+            padding: 12px;
             border: none;
-            border-radius: 30px;
-            background-color: #2196F3;
+            border-radius: 25px;
+            background: #2196F3;
             color: white;
-            font-size: 16px;
-            font-weight: 600;
-            cursor: pointer;
-            text-align: center;
+            font-size: clamp(14px, 4vw, 16px);
+            font-weight: 500;
         }
 
         .zoom-controls {
             position: fixed;
-            bottom: 20px;
+            bottom: var(--button-spacing);
             left: 50%;
             transform: translateX(-50%);
             display: flex;
             align-items: center;
             gap: 8px;
             background: rgba(0, 0, 0, 0.5);
-            padding: 8px 16px;
+            padding: 8px;
             border-radius: 20px;
-            z-index: 100;
-            width: auto;
+            z-index: 10;
+            width: fit-content;
         }
 
         .zoom-button {
             background: rgba(255, 255, 255, 0.2);
             border: none;
             color: white;
-            padding: 4px 12px;
+            padding: 5px 10px;
             border-radius: 15px;
-            cursor: pointer;
-            font-size: 14px;
-        }
-
-        .zoom-button:active {
-            background: rgba(255, 255, 255, 0.3);
+            font-size: clamp(12px, 3.5vw, 14px);
+            min-width: 45px;
+            text-align: center;
         }
 
         #zoomSlider {
-            width: 120px;
+            width: clamp(80px, 30vw, 120px);
             margin: 0 8px;
-        }
-
-        #zoomLevel {
-            color: white;
-            min-width: 40px;
-            text-align: center;
         }
 
         /* Preview elements */
@@ -649,6 +625,46 @@
             document.getElementById('zoomSlider').addEventListener('input', (e) => {
                 setZoom(parseFloat(e.target.value));
             });
+        });
+
+        // Add this function to handle responsive layout
+        function adjustLayout() {
+            const root = document.documentElement;
+            const windowHeight = window.innerHeight;
+            const windowWidth = window.innerWidth;
+            
+            // Adjust camera height based on screen size
+            if (windowHeight < 600) {
+                root.style.setProperty('--camera-height', '50vh');
+                root.style.setProperty('--button-spacing', '8px');
+            } else if (windowHeight < 800) {
+                root.style.setProperty('--camera-height', '60vh');
+                root.style.setProperty('--button-spacing', '10px');
+            } else {
+                root.style.setProperty('--camera-height', '65vh');
+                root.style.setProperty('--button-spacing', '12px');
+            }
+
+            // Adjust for different screen widths
+            if (windowWidth < 360) {
+                root.style.setProperty('--control-size', '35px');
+            } else {
+                root.style.setProperty('--control-size', '40px');
+            }
+        }
+
+        // Call on load and resize
+        window.addEventListener('load', adjustLayout);
+        window.addEventListener('resize', adjustLayout);
+        window.addEventListener('orientationchange', () => {
+            // Small delay to ensure orientation change is complete
+            setTimeout(adjustLayout, 100);
+        });
+
+        // Add to your existing DOMContentLoaded event
+        document.addEventListener('DOMContentLoaded', () => {
+            adjustLayout();
+            // ... your existing initialization code ...
         });
     </script>
     <script src="drive-upload.js"></script>

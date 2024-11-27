@@ -1,43 +1,42 @@
-// Remove any duplicate declarations and make functions globally available
-window.googleApiConfig = {
-    CLIENT_ID: 'YOUR_CLIENT_ID',
-    API_KEY: 'YOUR_API_KEY',
-    DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
-    SCOPES: 'https://www.googleapis.com/auth/drive.file'
-};
-
-// Initialize variables in a separate namespace
-window.googleApiState = {
-    tokenClient: null,
-    gapiInited: false,
-    gisInited: false
+// Create a namespace for Google API configuration
+window.googleApi = {
+    config: {
+        API_KEY: 'YOUR_API_KEY',
+        CLIENT_ID: 'YOUR_CLIENT_ID',
+        DISCOVERY_DOC: 'https://www.googleapis.com/discovery/v1/apis/drive/v3/rest',
+        SCOPES: 'https://www.googleapis.com/auth/drive.file'
+    },
+    state: {
+        tokenClient: null,
+        gapiInited: false,
+        gisInited: false
+    }
 };
 
 // Initialize Google API
-window.initializeGoogleAPI = async function() {
+window.initGoogleApi = async function() {
     try {
+        // Load the API client
         await new Promise((resolve) => {
-            gapi.load('client', async () => {
-                try {
-                    await gapi.client.init({
-                        apiKey: window.googleApiConfig.API_KEY,
-                        discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
-                    });
-                    window.googleApiState.gapiInited = true;
-                    resolve();
-                } catch (error) {
-                    console.error('GAPI init error:', error);
-                    throw error;
-                }
-            });
+            gapi.load('client', resolve);
         });
 
-        window.googleApiState.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: window.googleApiConfig.CLIENT_ID,
-            scope: window.googleApiConfig.SCOPES,
-            callback: '', // defined at request time
+        // Initialize the client
+        await gapi.client.init({
+            apiKey: window.googleApi.config.API_KEY,
+            discoveryDocs: [window.googleApi.config.DISCOVERY_DOC],
         });
-        window.googleApiState.gisInited = true;
+
+        // Initialize token client
+        window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
+            client_id: window.googleApi.config.CLIENT_ID,
+            scope: window.googleApi.config.SCOPES,
+            callback: '', // Will be set during upload
+        });
+
+        window.googleApi.state.gapiInited = true;
+        window.googleApi.state.gisInited = true;
+        
         console.log('Google API initialized successfully');
         return true;
     } catch (error) {
@@ -48,34 +47,28 @@ window.initializeGoogleAPI = async function() {
 
 // Upload function
 window.uploadToGoogleDrive = async function(blob, type) {
-    if (!window.googleApiState.gapiInited || !window.googleApiState.gisInited) {
-        console.error('Google API not initialized');
+    if (!window.googleApi.state.gapiInited || !window.googleApi.state.gisInited) {
         throw new Error('Google API not initialized');
     }
 
     try {
-        if (typeof showStatus === 'function') {
-            showStatus('Starting upload...');
-        }
+        showStatus('Starting upload...');
 
-        // Check if we need to authenticate
+        // Handle authentication
         if (!gapi.client.getToken()) {
             await new Promise((resolve, reject) => {
-                try {
-                    window.googleApiState.tokenClient.callback = async (resp) => {
-                        if (resp.error !== undefined) {
-                            reject(resp);
-                            return;
-                        }
+                window.googleApi.state.tokenClient.callback = (resp) => {
+                    if (resp.error) {
+                        reject(resp);
+                    } else {
                         resolve(resp);
-                    };
-                    window.googleApiState.tokenClient.requestAccessToken({ prompt: 'consent' });
-                } catch (err) {
-                    reject(err);
-                }
+                    }
+                };
+                window.googleApi.state.tokenClient.requestAccessToken();
             });
         }
 
+        // Prepare file metadata
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
 
@@ -87,31 +80,26 @@ window.uploadToGoogleDrive = async function(blob, type) {
             reader.readAsDataURL(blob);
         });
 
-        const metadata = {
-            name: fileName,
-            mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
-        };
-
+        // Upload to Drive
         const response = await gapi.client.drive.files.create({
-            resource: metadata,
+            resource: {
+                name: fileName,
+                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
+            },
             media: {
-                mimeType: metadata.mimeType,
+                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
                 body: base64Data
             },
             fields: 'id,webViewLink'
         });
 
         console.log('File uploaded successfully:', response.result.webViewLink);
-        if (typeof showStatus === 'function') {
-            showStatus('Upload successful!');
-        }
+        showStatus('Upload successful!');
         return response.result;
 
     } catch (error) {
         console.error('Upload error:', error);
-        if (typeof showStatus === 'function') {
-            showStatus('Upload failed. Please try again.');
-        }
+        showStatus('Upload failed. Please try again.');
         throw error;
     }
 };

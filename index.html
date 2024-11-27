@@ -2,13 +2,56 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
     <title>Camera Upload</title>
+    
+    <!-- Make sure all required scripts are loaded in the correct order -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css" rel="stylesheet">
     <script src="https://apis.google.com/js/api.js"></script>
     <script src="https://accounts.google.com/gsi/client"></script>
     <script src="config.js"></script>
     <script src="drive-upload.js"></script>
-    <style>
+</head>
+<body>
+    <div class="container">
+        <div class="camera-container">
+            <video id="camera" autoplay playsinline></video>
+            <div class="grid-overlay">
+                <div class="grid-line vertical"></div>
+                <div class="grid-line vertical"></div>
+                <div class="grid-line horizontal"></div>
+                <div class="grid-line horizontal"></div>
+            </div>
+        </div>
+        <div class="camera-controls">
+            <button id="switchCamera" class="control-button" title="Switch Camera">
+                <i class="fas fa-sync-alt"></i>
+            </button>
+            <button id="toggleGrid" class="control-button" title="Toggle Grid">
+                <i class="fas fa-th"></i>
+            </button>
+            <button id="toggleFlash" class="control-button" title="Toggle Flash">
+                <i class="fas fa-bolt"></i>
+            </button>
+        </div>
+        <div class="button-container">
+            <button id="capture" class="button" aria-label="Take Photo">Take Photo</button>
+            <button id="recordButton" class="button" aria-label="Record Video">Record Video</button>
+        </div>
+        <button id="uploadPhoto" class="control-button" style="display: none;" aria-label="Upload Photo">
+            <i class="fas fa-cloud-upload-alt"></i>
+        </button>
+        <button id="uploadVideo" class="control-button" style="display: none;" aria-label="Upload Video">
+            <i class="fas fa-cloud-upload-alt"></i>
+        </button>
+    </div>
+    <script>
+        :root {
+            --camera-height: 65vh;
+            --button-spacing: 12px;
+            --control-size: 40px;
+        }
+
         * {
             margin: 0;
             padding: 0;
@@ -105,87 +148,7 @@
             margin: 0 8px;
         }
 
-        /* Preview elements */
-        #preview, #videoPreview {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            display: none;
-            background-color: #2a2a2a;
-        }
-
-        /* Hide canvas */
-        #canvas {
-            display: none;
-        }
-
-        /* iOS specific fixes */
-        @supports (-webkit-touch-callout: none) {
-            body {
-                height: -webkit-fill-available;
-            }
-            .container {
-                height: -webkit-fill-available;
-            }
-        }
-        @supports (padding: env(safe-area-inset-top)) {
-        .container {
-            padding-top: env(safe-area-inset-top);
-            padding-bottom: env(safe-area-inset-bottom);
-            }
-        }
-        /* Landscape mode adjustments */
-        @media screen and (orientation: landscape) {
-            .container {
-                flex-direction: row;
-                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
-            }
-
-            .button-container {
-                position: relative;
-                bottom: auto;
-                right: 20px;
-                width: auto;
-            }
-
-            .zoom-controls {
-                flex-direction: column;
-                left: auto;
-                right: 20px;
-                bottom: 50%;
-                transform: translateY(50%);
-            }
-
-            h1 {
-                writing-mode: vertical-lr;
-                transform: rotate(180deg);
-                margin: 0 16px;
-            }
-        }
-
-        .preview-button {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            width: 50px;
-            height: 50px;
-            border-radius: 25px;
-            border: 2px solid white;
-            padding: 0;
-            overflow: hidden;
-            background: none;
-        }
-
-        .preview-button img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        #preview, #videoPreview {
+        .camera-controls {
             position: fixed;
             top: 0;
             left: 0;
@@ -197,53 +160,19 @@
             z-index: 1000;
         }
 
-        /* Shutter animation overlay */
-        .shutter-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: #fff;
-            opacity: 0;
-            pointer-events: none;
-            z-index: 1000;
-        }
-
-        /* Shutter animation */
-        @keyframes shutterAnimation {
-            0% { opacity: 0; }
-            5% { opacity: 0.8; }
-            100% { opacity: 0; }
-        }
-
-        .shutter-animation {
-            animation: shutterAnimation 0.5s ease-out;
-        }
-
-        /* Optional: Add a focus frame animation */
-        .focus-frame {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            width: 80px;
-            height: 80px;
-            border: 2px solid #fff;
+        .control-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            width: var(--control-size);
+            height: var(--control-size);
             border-radius: 50%;
             opacity: 0;
             pointer-events: none;
         }
 
-        @keyframes focusFrameAnimation {
-            0% { 
-                opacity: 1;
-                transform: translate(-50%, -50%) scale(1.5);
-            }
-            100% { 
-                opacity: 0;
-                transform: translate(-50%, -50%) scale(0.8);
-            }
+        .control-button:active {
+            background: rgba(255, 255, 255, 0.3);
         }
 
         .focus-animation {
@@ -260,6 +189,7 @@
             padding: 10px 20px;
             border-radius: 20px;
             z-index: 1000;
+            opacity: 0;
             transition: opacity 0.3s;
         }
 
@@ -267,25 +197,26 @@
             opacity: 1;
         }
 
-        #upload {
-            position: fixed;
-            bottom: 80px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: #2196F3;
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            border: none;
-            z-index: 1000;
-            display: block;
-        }
-
         .recording {
             background: #ff4444 !important;
         }
 
-        .control-button {
+        /* Preview elements */
+        #preview, #videoPreview {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: rgba(0, 0, 0, 0.9);
+            display: none;
+            z-index: 1000;
+        }
+
+        /* Upload buttons */
+        #uploadPhoto, #uploadVideo {
+            display: none;
             background: #2196F3;
             color: white;
             border: none;
@@ -293,210 +224,74 @@
             border-radius: 5px;
             cursor: pointer;
             margin: 5px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        
-        .control-button:hover {
-            background: #1976D2;
-        }
-        
-        .control-button i {
-            font-size: 1.2em;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <h1>Camera Upload</h1>
-        <div class="camera-container">
-            <video id="camera" autoplay playsinline></video>
-            <button id="previewButton" class="preview-button" style="display: none;">
-                <img id="previewThumbnail" alt="Preview">
-            </button>
-            <div class="camera-controls top-controls">
-                <button class="control-button" id="flashButton">
-                    <i class="fas fa-bolt"></i>
-                </button>
-                <button class="control-button" id="timerButton">
-                    <i class="fas fa-stopwatch"></i>
-                </button>
-                <button class="control-button" id="gridButton">
-                    <i class="fas fa-th"></i>
-                </button>
-                <button class="control-button" id="filterButton">
-                    <i class="fas fa-magic"></i>
-                </button>
-            </div>
-
-            <div class="timer-display" id="timerDisplay" style="display: none;">3</div>
-
-            <div class="grid-overlay" id="gridOverlay" style="display: none;">
-                <div class="grid-line vertical"></div>
-                <div class="grid-line vertical"></div>
-                <div class="grid-line horizontal"></div>
-                <div class="grid-line horizontal"></div>
-            </div>
-
-            <div class="filter-options" id="filterOptions" style="display: none;">
-                <button class="filter-button" data-filter="none">Normal</button>
-                <button class="filter-button" data-filter="grayscale(100%)">B&W</button>
-                <button class="filter-button" data-filter="sepia(100%)">Sepia</button>
-                <button class="filter-button" data-filter="contrast(150%)">Contrast</button>
-                <button class="filter-button" data-filter="brightness(150%)">Bright</button>
-                <button class="filter-button" data-filter="saturate(200%)">Vivid</button>
-            </div>
-
-            <div class="timer-options" id="timerOptions" style="display: none;">
-                <button class="timer-button" data-seconds="0">Off</button>
-                <button class="timer-button" data-seconds="3">3s</button>
-                <button class="timer-button" data-seconds="5">5s</button>
-                <button class="timer-button" data-seconds="10">10s</button>
-            </div>
-        </div>
-        <div class="zoom-controls">
-            <button class="zoom-button" data-zoom="0.5">0.5x</button>
-            <button class="zoom-button" data-zoom="1">1x</button>
-            <button class="zoom-button" data-zoom="2">2x</button>
-            <input type="range" id="zoomSlider" min="0.5" max="10" step="0.1" value="1">
-            <span id="zoomLevel">1x</span>
-        </div>
-        <div class="button-container">
-            <button id="switchCamera" class="button">Switch Camera</button>
-            <button id="capture" class="button">Take Photo</button>
-            <button id="recordButton" class="button">Record Video</button>
-            <div class="shutter-overlay"></div>
-            <div id="statusMessage" class="status-message"></div>
-        </div>
-        <div class="camera-controls">
-            <button id="uploadPhoto" class="control-button" style="display: none;">
-                Upload Photo
-            </button>
-            <button id="uploadVideo" class="control-button" style="display: none;">
-                Upload Video
-            </button>
-        </div>
-    </div>
-    <div class="status-message" id="statusMessage"></div>
-    <canvas id="canvas" style="display:none;"></canvas>
-
-    <script>
-        let imageBlob = null;
-        let videoBlob = null;
-        let mediaRecorder = null;
-        let recordedChunks = [];
-        let currentFacingMode = 'environment'; // Start with rear camera
-        let currentZoom = 1;
-        let currentStream = null;
-        let isFlashOn = false;
-        let isFrontCamera = false;
-        let currentFilter = 'none';
-        let isGridVisible = false;
-        let isMuted = false;
-        let isTimerActive = false;
-        let timerDuration = 0;
-        let videoWidth = 0;
-        let videoHeight = 0;
-        let cameras = [];
-        let currentCameraIndex = 0;
-        let isInitialized = false;
-        let isProcessing = false; 
-        let lastCaptureBlob = null;
-        let isPreviewVisible = false;
-        let tokenClient;
-        let gapiInited = false;
-        let gisInited = false;
-        let currentPhoto = null;
-        let currentVideo = null;
-
-        // Add this at the beginning of your script
-        function debugLog(message, data = null) {
-            const timestamp = new Date().toISOString();
-            console.log(`[${timestamp}] ${message}`, data || '');
         }
 
-        // Initialize the API
-        function gapiLoaded() {
-            gapi.load('client', initializeGapiClient);
+        /* Grid overlay */
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            pointer-events: none;
         }
 
-        async function initializeGapiClient() {
-            await gapi.client.init({
-                apiKey: API_KEY,
-                discoveryDocs: [DISCOVERY_DOC],
-            });
-            gapiInited = true;
-            maybeEnableButtons();
+        .grid-line {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
         }
 
-        function gisLoaded() {
-            tokenClient = google.accounts.oauth2.initTokenClient({
-                client_id: CLIENT_ID,
-                scope: SCOPES,
-                callback: '', // defined later
-            });
-            gisInited = true;
-            maybeEnableButtons();
+        .grid-line.vertical {
+            width: 1px;
+            height: 100%;
         }
 
-        function maybeEnableButtons() {
-            if (gapiInited && gisInited) {
-                document.getElementById('upload').style.display = 'block';
+        .grid-line.horizontal {
+            height: 1px;
+            width: 100%;
+        }
+
+        .vertical:nth-child(1) { left: 33.33%; }
+        .vertical:nth-child(2) { left: 66.66%; }
+        .horizontal:nth-child(3) { top: 33.33%; }
+        .horizontal:nth-child(4) { top: 66.66%; }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            body, .container {
+                height: -webkit-fill-available;
             }
         }
 
-        async function getCameras() {
-            try {
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                cameras = devices.filter(device => device.kind === 'videoinput');
-                console.log('Available cameras:', cameras);
-            } catch (error) {
-                console.error('Error getting cameras:', error);
+        @supports (padding: env(safe-area-inset-top)) {
+            .container {
+                padding-top: env(safe-area-inset-top);
+                padding-bottom: env(safe-area-inset-bottom);
             }
         }
 
-        async function startCamera() {
-            try {
-                if (currentStream) {
-                    currentStream.getTracks().forEach(track => track.stop());
-                }
+        /* Landscape mode */
+        @media screen and (orientation: landscape) {
+            .container {
+                flex-direction: row;
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) 
+                         env(safe-area-inset-bottom) env(safe-area-inset-left);
+            }
 
-                const constraints = {
-                    video: {
-                        facingMode: currentFacingMode,
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: false
-                };
+            .camera-controls {
+                flex-direction: column;
+                left: auto;
+                right: 20px;
+                top: 50%;
+                transform: translateY(-50%);
+            }
 
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
-                const video = document.getElementById('camera');
-                
-                if (!video) {
-                    throw new Error('Camera element not found');
-                }
-
-                video.srcObject = currentStream;
-
-                // Wait for video to be ready
-                await new Promise((resolve, reject) => {
-                    video.onloadedmetadata = () => {
-                        video.play()
-                            .then(resolve)
-                            .catch(reject);
-                    };
-                    video.onerror = reject;
-                });
-
-                console.log('Camera started successfully');
-                return true;
-
-            } catch (error) {
-                console.error('Camera start error:', error);
-                showStatus('Camera access failed: ' + error.message);
-                return false;
+            .button-container {
+                position: relative;
+                bottom: auto;
+                right: 20px;
+                width: auto;
             }
         }
 
@@ -1053,6 +848,216 @@
                 await window.uploadToGoogleDrive(window.capturedMedia.currentVideo, 'video');
             }
         });
+
+        // Camera controls
+        async function toggleFlash() {
+            try {
+                if (!track || !flashSupported) return;
+                const capabilities = track.getCapabilities();
+                const settings = track.getSettings();
+                
+                const newState = !settings.torch;
+                await track.applyConstraints({
+                    advanced: [{ torch: newState }]
+                });
+                
+                document.getElementById('toggleFlash').classList.toggle('active', newState);
+                showStatus(newState ? 'Flash on' : 'Flash off');
+            } catch (error) {
+                debugLog('Flash toggle error:', error);
+                showStatus('Failed to toggle flash');
+            }
+        }
+
+        async function switchCamera() {
+            if (availableCameras.length <= 1) {
+                showStatus('No other cameras available');
+                return;
+            }
+            
+            currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
+            debugLog('Switching to camera:', currentCameraIndex);
+            await startCamera();
+        }
+
+        function toggleGrid() {
+            const grid = document.querySelector('.grid-overlay');
+            const isVisible = grid.style.display === 'block';
+            grid.style.display = isVisible ? 'none' : 'block';
+        }
+
+        // Zoom control
+        async function setZoom(zoomLevel) {
+            try {
+                if (!track) return;
+                
+                const capabilities = track.getCapabilities();
+                if (!capabilities.zoom) return;
+                
+                zoomLevel = Math.min(Math.max(zoomLevel, capabilities.zoom.min), capabilities.zoom.max);
+                await track.applyConstraints({ advanced: [{ zoom: zoomLevel }] });
+                
+                currentZoom = zoomLevel;
+                document.getElementById('zoomSlider').value = zoomLevel;
+                debugLog('Zoom set to:', zoomLevel);
+            } catch (error) {
+                debugLog('Zoom error:', error);
+            }
+        }
+
+        // Photo capture
+        async function capturePhoto() {
+            if (isProcessing) return;
+            isProcessing = true;
+            
+            try {
+                const video = document.getElementById('camera');
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0);
+                
+                const capturedBlob = await new Promise((resolve) => {
+                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
+                });
+
+                if (!capturedBlob) {
+                    throw new Error('Failed to capture photo');
+                }
+
+                debugLog('Photo captured', { size: capturedBlob.size });
+                window.capturedMedia.currentPhoto = capturedBlob;
+                
+                // Show upload button
+                const uploadButton = document.getElementById('uploadPhoto');
+                if (uploadButton) {
+                    uploadButton.style.display = 'block';
+                }
+
+                showStatus('Photo captured');
+                
+            } catch (error) {
+                debugLog('Photo capture error:', error);
+                showStatus('Failed to capture photo');
+            } finally {
+                isProcessing = false;
+            }
+        }
+
+        // Video recording
+        function startRecording() {
+            try {
+                if (!currentStream) return;
+                
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(currentStream, {
+                    mimeType: 'video/webm;codecs=vp8,opus'
+                });
+
+                mediaRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        recordedChunks.push(event.data);
+                    }
+                };
+
+                mediaRecorder.onstop = async () => {
+                    try {
+                        const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                        window.capturedMedia.currentVideo = videoBlob;
+                        
+                        // Show upload button
+                        const uploadButton = document.getElementById('uploadVideo');
+                        if (uploadButton) {
+                            uploadButton.style.display = 'block';
+                        }
+                        
+                        showStatus('Recording ready');
+                        debugLog('Video recorded', { size: videoBlob.size });
+                    } catch (error) {
+                        debugLog('Video processing error:', error);
+                        showStatus('Failed to process video');
+                    }
+                };
+
+                mediaRecorder.start();
+                showStatus('Recording started');
+                
+            } catch (error) {
+                debugLog('Recording error:', error);
+                showStatus('Failed to start recording');
+            }
+        }
+
+        function stopRecording() {
+            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
+                mediaRecorder.stop();
+                showStatus('Recording stopped');
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize camera
+            initializeCamera().catch(error => {
+                debugLog('Camera initialization failed:', error);
+                showStatus('Failed to initialize camera');
+            });
+
+            // Add error handling to all event listeners
+            document.getElementById('switchCamera')?.addEventListener('click', switchCamera);
+            document.getElementById('toggleGrid')?.addEventListener('click', toggleGrid);
+            document.getElementById('toggleFlash')?.addEventListener('click', toggleFlash);
+            document.getElementById('capture')?.addEventListener('click', capturePhoto);
+            
+            // Add proper error handling for upload buttons
+            document.getElementById('uploadPhoto')?.addEventListener('click', async () => {
+                if (!window.capturedMedia.currentPhoto) {
+                    showStatus('No photo to upload');
+                    return;
+                }
+                try {
+                    showStatus('Starting upload...');
+                    await window.uploadToGoogleDrive(window.capturedMedia.currentPhoto, 'image');
+                    showStatus('Upload complete');
+                } catch (error) {
+                    debugLog('Upload failed:', error);
+                    showStatus('Upload failed: ' + error.message);
+                }
+            });
+
+            document.getElementById('uploadVideo')?.addEventListener('click', async () => {
+                if (!window.capturedMedia.currentVideo) {
+                    showStatus('No video to upload');
+                    return;
+                }
+                try {
+                    showStatus('Starting upload...');
+                    await window.uploadToGoogleDrive(window.capturedMedia.currentVideo, 'video');
+                    showStatus('Upload complete');
+                } catch (error) {
+                    debugLog('Upload failed:', error);
+                    showStatus('Upload failed: ' + error.message);
+                }
+            });
+        });
+
+        // Initialize global variables properly
+        window.capturedMedia = {
+            currentPhoto: null,
+            currentVideo: null
+        };
+
+        let currentStream = null;
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isProcessing = false;
+        let currentZoom = 1;
+        let availableCameras = [];
+        let currentCameraIndex = 0;
+        let flashSupported = false;
+        let track = null;
     </script>
 </body>
 </html>

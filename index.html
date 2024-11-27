@@ -5,7 +5,6 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.4/css/all.min.css">
     <style>
         * {
             margin: 0;
@@ -354,6 +353,20 @@
         .capturing {
             animation: capture-animation 0.3s ease-out;
         }
+
+        .camera-container {
+            overflow: hidden !important;
+            position: relative;
+        }
+        
+        #camera {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform-origin: center center;
+            transition: transform 0.2s ease-out;
+            transform: translate(-50%, -50%) scale(1);
+        }
     </style>
 </head>
 <body>
@@ -435,6 +448,8 @@
         let isMuted = false;
         let isTimerActive = false;
         let timerDuration = 0;
+        let videoWidth = 0;
+        let videoHeight = 0;
 
         async function startCamera(facingMode = 'environment') {
             try {
@@ -459,6 +474,15 @@
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
+                // Wait for video metadata to load
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        videoWidth = video.videoWidth;
+                        videoHeight = video.videoHeight;
+                        resolve();
+                    };
+                });
+
                 // Show zoom controls
                 document.querySelector('.zoom-controls').style.display = 'flex';
                 
@@ -467,15 +491,16 @@
                 zoomSlider.value = 1;
                 document.getElementById('zoomLevel').textContent = '1x';
 
+                // Set initial zoom
+                setZoom(1);
+
                 return new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play()
-                            .then(resolve)
-                            .catch(error => {
-                                console.error('Error playing video:', error);
-                                resolve();
-                            });
-                    };
+                    video.play()
+                        .then(resolve)
+                        .catch(error => {
+                            console.error('Error playing video:', error);
+                            resolve();
+                        });
                 });
             } catch (err) {
                 console.error('Error accessing camera:', err);
@@ -707,8 +732,23 @@
             zoomLevel = Math.min(Math.max(zoomLevel, 0.5), 10);
             currentZoom = zoomLevel;
 
-            // Apply CSS transform for zoom effect
+            // Calculate the new dimensions
+            const scale = 1 / zoomLevel;
+            
+            // Calculate dimensions to maintain aspect ratio
+            const newWidth = videoWidth * scale;
+            const newHeight = videoHeight * scale;
+            
+            // Calculate position to keep center
+            const leftOffset = (videoWidth - newWidth) / 2;
+            const topOffset = (videoHeight - newHeight) / 2;
+            
+            // Apply the zoom effect
+            video.style.width = `${videoWidth}px`;
+            video.style.height = `${videoHeight}px`;
             video.style.transform = `scale(${zoomLevel})`;
+            video.style.transformOrigin = 'center center';
+            video.style.objectFit = 'cover';
             
             // Update UI
             document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;

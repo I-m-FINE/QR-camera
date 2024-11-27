@@ -1,4 +1,3 @@
-// Remove all config declarations and use the global config
 window.googleApi = {
     state: {
         tokenClient: null,
@@ -9,24 +8,24 @@ window.googleApi = {
 
 window.initGoogleApi = async function() {
     try {
-        // First, load the client
-        await new Promise((resolve) => {
-            gapi.load('client:auth2', resolve);
+        await new Promise((resolve, reject) => {
+            gapi.load('client', {
+                callback: resolve,
+                onerror: () => reject('GAPI client failed to load'),
+                timeout: 5000, // 5 seconds
+                ontimeout: () => reject('GAPI client load timeout')
+            });
         });
 
-        // Initialize the client
         await gapi.client.init({
             apiKey: window.googleApiConfig.API_KEY,
-            clientId: window.googleApiConfig.CLIENT_ID,
             discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
-            scope: window.googleApiConfig.SCOPES
         });
 
-        // Initialize token client
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: window.googleApiConfig.CLIENT_ID,
             scope: window.googleApiConfig.SCOPES,
-            callback: '', // Will be set later
+            callback: '', // Will be set during upload
         });
 
         window.googleApi.state.gapiInited = true;
@@ -40,7 +39,6 @@ window.initGoogleApi = async function() {
     }
 };
 
-// Upload function
 window.uploadToGoogleDrive = async function(blob, type) {
     try {
         if (!window.googleApi.state.gapiInited || !window.googleApi.state.gisInited) {
@@ -49,41 +47,28 @@ window.uploadToGoogleDrive = async function(blob, type) {
 
         showStatus('Starting upload...');
 
-        // Get auth instance
-        const authInstance = gapi.auth2.getAuthInstance();
-        
-        // Check if user is signed in
-        if (!authInstance.isSignedIn.get()) {
-            // Request authentication
-            await new Promise((resolve, reject) => {
-                try {
-                    if (!window.googleApi.state.tokenClient) {
-                        reject(new Error('Token client not initialized'));
-                        return;
-                    }
+        await new Promise((resolve, reject) => {
+            if (!window.googleApi.state.tokenClient) {
+                reject(new Error('Token client not initialized'));
+                return;
+            }
 
-                    window.googleApi.state.tokenClient.callback = (response) => {
-                        if (response.error) {
-                            reject(response);
-                        } else {
-                            resolve(response);
-                        }
-                    };
-
-                    window.googleApi.state.tokenClient.requestAccessToken({
-                        prompt: 'consent'
-                    });
-                } catch (err) {
-                    reject(err);
+            window.googleApi.state.tokenClient.callback = (response) => {
+                if (response.error) {
+                    reject(response);
+                } else {
+                    resolve(response);
                 }
-            });
-        }
+            };
 
-        // Now proceed with upload
+            window.googleApi.state.tokenClient.requestAccessToken({
+                prompt: 'consent'
+            });
+        });
+
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
 
-        // Convert blob to base64
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
             reader.onloadend = () => resolve(reader.result.split(',')[1]);
@@ -91,17 +76,13 @@ window.uploadToGoogleDrive = async function(blob, type) {
             reader.readAsDataURL(blob);
         });
 
-        // Create file metadata
-        const metadata = {
-            name: fileName,
-            mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
-        };
-
-        // Upload file
         const response = await gapi.client.drive.files.create({
-            resource: metadata,
+            resource: {
+                name: fileName,
+                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
+            },
             media: {
-                mimeType: metadata.mimeType,
+                mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
                 body: base64Data
             },
             fields: 'id,webViewLink'

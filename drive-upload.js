@@ -55,16 +55,15 @@ window.uploadToGoogleDrive = async function(blob, type) {
                 return;
             }
 
-            const handleTokenResponse = (response) => {
-                if (response.error !== undefined) {
-                    reject(response);
-                } else {
-                    resolve(response);
-                }
-            };
-
             tokenClient.requestAccessToken({
-                callback: handleTokenResponse
+                prompt: 'consent',
+                callback: (response) => {
+                    if (response.error !== undefined) {
+                        reject(response);
+                    } else {
+                        resolve(response);
+                    }
+                }
             });
         });
 

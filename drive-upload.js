@@ -43,6 +43,11 @@ window.initGoogleApi = async function() {
 
 // Upload to Google Drive
 window.uploadToGoogleDrive = async function(blob, type) {
+    if (!blob) {
+        console.error('No data to upload');
+        return;
+    }
+
     try {
         // Ensure API is initialized
         if (!window.googleApi.state.gapiInited) {
@@ -52,26 +57,19 @@ window.uploadToGoogleDrive = async function(blob, type) {
         showStatus('Starting upload...');
 
         // Get token
-        const tokenResponse = await new Promise((resolve, reject) => {
-            const tokenClient = window.googleApi.state.tokenClient;
-            
-            if (!tokenClient) {
-                reject(new Error('Token client not initialized'));
-                return;
+        await new Promise((resolve, reject) => {
+            try {
+                window.googleApi.state.tokenClient.callback = (resp) => {
+                    if (resp.error !== undefined) {
+                        reject(resp);
+                    }
+                    resolve(resp);
+                };
+                window.googleApi.state.tokenClient.requestAccessToken();
+            } catch (err) {
+                reject(err);
             }
-
-            // Request token without setting callback property
-            tokenClient.requestAccessToken((response) => {
-                if (response.error !== undefined) {
-                    reject(response.error);
-                } else {
-                    resolve(response);
-                }
-            });
         });
-
-        // Set the token
-        gapi.client.setToken(tokenResponse);
 
         // Create file metadata
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

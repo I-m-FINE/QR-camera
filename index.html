@@ -348,6 +348,8 @@
             <div class="shutter-overlay"></div>
             <div id="statusMessage" class="status-message"></div>
             <button id="upload" class="button" style="display: none;">Upload to Drive</button>
+            <button id="uploadPhoto" style="display: none;">Upload Photo to Drive</button>
+            <button id="uploadVideo" style="display: none;">Upload Video to Drive</button>
         </div>
     </div>
     <div class="status-message" id="statusMessage"></div>
@@ -379,6 +381,8 @@
         let tokenClient;
         let gapiInited = false;
         let gisInited = false;
+        let currentPhoto = null;
+        let currentVideo = null;
 
         // Initialize the API
         function gapiLoaded() {
@@ -994,6 +998,33 @@
             }
         `;
         document.head.appendChild(style);
+
+        // After taking a photo
+        function capturePhoto() {
+            // ... existing photo capture code ...
+            currentPhoto = blob;
+            document.getElementById('uploadPhoto').style.display = 'block';
+        }
+
+        // After recording a video
+        function stopRecording() {
+            // ... existing video recording code ...
+            currentVideo = blob;
+            document.getElementById('uploadVideo').style.display = 'block';
+        }
+
+        // Add event listeners for upload buttons
+        document.getElementById('uploadPhoto').addEventListener('click', async () => {
+            if (currentPhoto) {
+                await uploadToGoogleDrive(currentPhoto, 'image');
+            }
+        });
+
+        document.getElementById('uploadVideo').addEventListener('click', async () => {
+            if (currentVideo) {
+                await uploadToGoogleDrive(currentVideo, 'video');
+            }
+        });
     </script>
 </body>
 </html>

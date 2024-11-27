@@ -246,6 +246,41 @@
         .focus-animation {
             animation: focusFrameAnimation 0.3s ease-out;
         }
+
+        .status-message {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            z-index: 1000;
+            transition: opacity 0.3s;
+        }
+
+        .status-visible {
+            opacity: 1;
+        }
+
+        #upload {
+            position: fixed;
+            bottom: 80px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: #2196F3;
+            color: white;
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: none;
+            z-index: 1000;
+            display: block;
+        }
+
+        .recording {
+            background: #ff4444 !important;
+        }
     </style>
 </head>
 <body>
@@ -306,7 +341,9 @@
             <button id="switchCamera" class="button">Switch Camera</button>
             <button id="capture" class="button">Take Photo</button>
             <button id="recordButton" class="button">Record Video</button>
-            <button id="upload" class="button" style="display:none;">Upload to Drive</button>
+            <div class="shutter-overlay"></div>
+            <div id="statusMessage" class="status-message"></div>
+            <button id="upload" class="button">Upload to Drive</button>
         </div>
     </div>
     <div class="status-message" id="statusMessage"></div>
@@ -652,12 +689,17 @@
             // ... your existing initialization code ...
         });
 
-        // Improved photo capture with error handling
+        // Capture photo
         async function capturePhoto() {
             if (isProcessing) return;
             isProcessing = true;
             
             try {
+                // Visual feedback
+                const shutterOverlay = document.querySelector('.shutter-overlay');
+                shutterOverlay.classList.add('shutter-animation');
+                showStatus('Taking photo...');
+
                 const video = document.getElementById('camera');
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
@@ -671,15 +713,24 @@
                 }
 
                 lastCaptureBlob = blob;
-                updatePreviewButton(blob);
-                await uploadCapture(blob, 'image');
                 
-                showStatus('Photo captured and uploaded');
+                // Show preview and upload button
+                updatePreviewButton(blob);
+                document.getElementById('upload').style.display = 'block';
+                
+                // Automatic upload
+                await uploadToGoogleDrive(blob, 'image');
+                
+                showStatus('Photo captured and uploaded!');
+
             } catch (error) {
                 console.error('Error capturing photo:', error);
                 showStatus('Failed to capture photo');
             } finally {
                 isProcessing = false;
+                setTimeout(() => {
+                    document.querySelector('.shutter-overlay').classList.remove('shutter-animation');
+                }, 500);
             }
         }
 
@@ -712,64 +763,69 @@
             }
         }
 
-        // Improved video recording
+        // Record video
         async function toggleRecording() {
             if (isProcessing) return;
             isProcessing = true;
             
-            try {
-                const recordButton = document.getElementById('recordButton');
+            const recordButton = document.getElementById('recordButton');
+            
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                // Start recording
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8,opus' });
                 
-                if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                    recordedChunks = [];
-                    mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8,opus' });
-                    
-                    mediaRecorder.ondataavailable = (e) => {
-                        if (e.data.size > 0) recordedChunks.push(e.data);
-                    };
-                    
-                    mediaRecorder.onstop = async () => {
-                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                        lastCaptureBlob = blob;
-                        updatePreviewButton(blob);
-                        await uploadCapture(blob, 'video');
-                        showStatus('Video recorded and uploaded');
-                    };
-                    
-                    mediaRecorder.start();
-                    recordButton.textContent = 'Stop Recording';
-                    recordButton.classList.add('recording');
-                } else {
-                    mediaRecorder.stop();
-                    recordButton.textContent = 'Record Video';
-                    recordButton.classList.remove('recording');
-                }
-            } catch (error) {
-                console.error('Error toggling recording:', error);
-                showStatus('Failed to toggle recording');
-            } finally {
-                isProcessing = false;
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) recordedChunks.push(e.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    lastCaptureBlob = blob;
+                    updatePreviewButton(blob);
+                    document.getElementById('upload').style.display = 'block';
+                    await uploadToGoogleDrive(blob, 'video');
+                    showStatus('Video recorded and uploaded!');
+                };
+                
+                mediaRecorder.start();
+                recordButton.textContent = 'Stop Recording';
+                recordButton.classList.add('recording');
+                showStatus('Recording started...');
+                
+            } else {
+                // Stop recording
+                mediaRecorder.stop();
+                recordButton.textContent = 'Record Video';
+                recordButton.classList.remove('recording');
+                showStatus('Recording stopped');
             }
         }
 
-        async function uploadCapture(blob, type) {
-            // Implement your upload logic here
-            // For example:
+        // Simplified upload function without restrictions
+        async function uploadToGoogleDrive(blob, type) {
             try {
                 const formData = new FormData();
-                formData.append('file', blob, `capture.${type === 'image' ? 'jpg' : 'webm'}`);
+                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+                const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
                 
-                const response = await fetch('/upload', {
+                formData.append('file', blob, fileName);
+                
+                const response = await fetch('/upload-to-drive', {
                     method: 'POST',
                     body: formData
                 });
                 
                 if (!response.ok) {
-                    throw new Error('Failed to upload capture');
+                    throw new Error('Upload failed');
                 }
+                
+                showStatus(`${type} uploaded successfully!`);
             } catch (error) {
-                console.error('Error uploading capture:', error);
-                showStatus('Failed to upload capture');
+                console.error('Upload error:', error);
+                showStatus('Failed to upload. Retrying...');
+                // Retry upload
+                setTimeout(() => uploadToGoogleDrive(blob, type), 1000);
             }
         }
 
@@ -779,14 +835,15 @@
         }
 
         // Function to show status message
-        function showStatus(message, duration = 3000) {
+        function showStatus(message) {
             const status = document.getElementById('statusMessage');
             status.textContent = message;
             status.style.display = 'block';
+            status.classList.add('status-visible');
             
             setTimeout(() => {
-                status.style.display = 'none';
-            }, duration);
+                status.classList.remove('status-visible');
+            }, 3000);
         }
 
         function setZoom(zoomLevel) {

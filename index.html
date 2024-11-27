@@ -46,6 +46,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            background-color: #000;
         }
 
         .button-container {
@@ -293,85 +294,96 @@
             }
         }
 
-        async function switchCamera() {
-            if (isProcessing) return;
-            isProcessing = true;
-            
-            try {
-                if (cameras.length < 2) {
-                    showStatus('Only one camera available');
-                    return;
-                }
-
-                // Stop current stream properly
-                if (currentStream) {
-                    currentStream.getTracks().forEach(track => {
-                        track.stop();
-                        currentStream.removeTrack(track);
-                    });
-                }
-
-                currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
-                isFlashOn = false; // Reset flash state
-                document.getElementById('flashButton').classList.remove('active');
-                
-                await startCamera();
-                setZoom(1); // Reset zoom after switching camera
-                showStatus('Camera switched');
-            } catch (error) {
-                console.error('Error switching camera:', error);
-                showStatus('Failed to switch camera');
-            } finally {
-                isProcessing = false;
-            }
-        }
-
         async function startCamera() {
+            if (currentStream) {
+                currentStream.getTracks().forEach(track => track.stop());
+            }
+
+            const video = document.getElementById('camera');
+            let stream = null;
+
             try {
-                if (!cameras[currentCameraIndex]) {
-                    throw new Error('Selected camera not available');
-                }
-
-                // Stop any existing stream
-                if (currentStream) {
-                    currentStream.getTracks().forEach(track => {
-                        track.stop();
-                    });
-                }
-
                 const constraints = {
                     video: {
-                        deviceId: { exact: cameras[currentCameraIndex].deviceId },
+                        deviceId: cameras[currentCameraIndex]?.deviceId 
+                            ? { exact: cameras[currentCameraIndex].deviceId }
+                            : undefined,
+                        facingMode: cameras[currentCameraIndex]?.label?.toLowerCase().includes('back') 
+                            ? 'environment' 
+                            : 'user',
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
                     }
                 };
 
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                const video = document.getElementById('camera');
+                stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 currentStream = stream;
 
-                // Ensure video plays
-                await video.play();
-                
-                // Reset zoom and flash when switching cameras
-                currentZoom = 1;
-                isFlashOn = false;
-                
-                await setupCameraControls();
-                showStatus('Camera switched');
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play().then(resolve).catch(e => {
+                            console.error('Error playing video:', e);
+                            resolve();
+                        });
+                    };
+                });
 
+                // Check if the video is actually playing
+                if (video.videoWidth === 0 || video.videoHeight === 0) {
+                    throw new Error('Video dimensions are zero. Camera may not be working.');
+                }
+
+                await setupCameraControls();
+                showStatus('Camera started successfully');
             } catch (error) {
                 console.error('Error starting camera:', error);
                 showStatus('Error starting camera: ' + error.message);
                 
-                // Try to recover by switching to first camera
-                if (currentCameraIndex !== 0) {
+                // If we failed with device ID, try without it
+                if (cameras[currentCameraIndex]?.deviceId) {
+                    console.log('Retrying without device ID...');
+                    cameras[currentCameraIndex].deviceId = undefined;
+                    await startCamera();
+                } else if (currentCameraIndex !== 0) {
+                    console.log('Trying first camera...');
                     currentCameraIndex = 0;
                     await startCamera();
+                } else {
+                    showStatus('Failed to start any camera. Please check permissions.');
                 }
             }
+        }
+
+        async function switchCamera() {
+            if (cameras.length < 2) {
+                showStatus('Only one camera available');
+                return;
+            }
+            currentCameraIndex = (currentCameraIndex + 1) % cameras.length;
+            await startCamera();
+        }
+
+        // Update initialization
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await getCameras();
+                await startCamera();
+                
+                document.getElementById('switchCamera').addEventListener('click', switchCamera);
+                // ... other event listeners ...
+                
+            } catch (error) {
+                console.error('Initialization failed:', error);
+                showStatus('Failed to initialize camera');
+            }
+        });
+
+        // Add this helper function
+        function showStatus(message) {
+            console.log(message);  // Log to console for debugging
+            // Implement your status display logic here
         }
 
         // Prevent screen rotation on iOS

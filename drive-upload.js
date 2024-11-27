@@ -32,12 +32,7 @@ window.initGoogleApi = async function() {
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: window.googleApiConfig.CLIENT_ID,
             scope: window.googleApiConfig.SCOPES,
-            prompt: 'consent',
-            callback: (resp) => {
-                if (resp.error !== undefined) {
-                    console.error('Token error:', resp.error);
-                }
-            }
+            prompt: 'consent'
         });
 
         window.googleApi.state.gapiInited = true;
@@ -59,26 +54,37 @@ window.uploadToGoogleDrive = async function(blob, type) {
 
         showStatus('Starting upload...');
 
-        // Get token
-        const tokenResponse = await new Promise((resolve, reject) => {
-            if (!window.googleApi.state.tokenClient) {
-                reject(new Error('Token client not initialized'));
-                return;
-            }
+        // Get token using a different approach
+        const tokenClient = window.googleApi.state.tokenClient;
+        if (!tokenClient) {
+            throw new Error('Token client not initialized');
+        }
 
-            window.googleApi.state.tokenClient.requestAccessToken({
-                callback: (response) => {
-                    if (response.error !== undefined) {
-                        reject(response.error);
-                    } else {
-                        resolve(response);
-                    }
+        // Request access token
+        const token = await new Promise((resolve, reject) => {
+            const handleTokenResponse = (response) => {
+                if (response.error !== undefined) {
+                    reject(new Error(response.error));
+                } else {
+                    resolve(response);
                 }
-            });
+            };
+
+            try {
+                tokenClient.requestAccessToken({
+                    callback: handleTokenResponse
+                });
+            } catch (err) {
+                reject(err);
+            }
         });
 
-        // Set the token
-        gapi.client.setToken(tokenResponse);
+        // Set the access token
+        if (token && token.access_token) {
+            gapi.client.setToken(token);
+        } else {
+            throw new Error('Failed to get access token');
+        }
 
         // Create file metadata
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

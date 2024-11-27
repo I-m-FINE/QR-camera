@@ -174,6 +174,55 @@
         }
 
         /* Existing animations and other styles remain the same */
+
+        .zoom-controls {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            z-index: 3;
+        }
+
+        .zoom-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .zoom-button:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #zoomSlider {
+            width: 100px;
+            margin: 0 8px;
+        }
+
+        #zoomLevel {
+            color: white;
+            min-width: 40px;
+            text-align: center;
+        }
+
+        @media screen and (orientation: landscape) {
+            .zoom-controls {
+                flex-direction: column;
+                left: unset;
+                right: 20px;
+                bottom: 50%;
+                transform: translateY(50%);
+            }
+        }
     </style>
 </head>
 <body>
@@ -183,6 +232,13 @@
             <video id="camera" autoplay playsinline onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
             <img id="preview" alt="Preview">
             <video id="videoPreview" controls></video>
+        </div>
+        <div class="zoom-controls">
+            <button class="zoom-button" data-zoom="0.5">0.5x</button>
+            <button class="zoom-button" data-zoom="1">1x</button>
+            <button class="zoom-button" data-zoom="2">2x</button>
+            <input type="range" id="zoomSlider" min="0.5" max="10" step="0.1" value="1">
+            <span id="zoomLevel">1x</span>
         </div>
         <div class="button-container">
             <button id="switchCamera" class="button">Switch Camera</button>
@@ -200,6 +256,7 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let currentFacingMode = 'environment'; // Track current camera
+        let currentZoom = 1;
 
         async function startCamera(facingMode = 'environment') {
             try {
@@ -222,6 +279,13 @@
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 currentFacingMode = facingMode;
+
+                // After getting the stream, set the zoom level
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                if (capabilities.zoom) {
+                    await setZoom(currentZoom);
+                }
 
                 // Return promise for when video is ready
                 return new Promise((resolve) => {
@@ -281,6 +345,33 @@
             // Add iOS specific class if needed
             if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
                 document.body.classList.add('ios-device');
+            }
+
+            // Add zoom controls event listeners
+            document.querySelectorAll('.zoom-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const zoomLevel = parseFloat(button.dataset.zoom);
+                    setZoom(zoomLevel);
+                });
+            });
+
+            const zoomSlider = document.getElementById('zoomSlider');
+            zoomSlider.addEventListener('input', (e) => {
+                setZoom(parseFloat(e.target.value));
+            });
+
+            // Initialize camera capabilities after starting the camera
+            await startCamera();
+            const video = document.getElementById('camera');
+            const track = video.srcObject?.getVideoTracks()[0];
+            if (track) {
+                const capabilities = track.getCapabilities();
+                if (capabilities.zoom) {
+                    const zoomSlider = document.getElementById('zoomSlider');
+                    zoomSlider.min = capabilities.zoom.min;
+                    zoomSlider.max = capabilities.zoom.max;
+                    zoomSlider.value = currentZoom;
+                }
             }
         });
 
@@ -441,6 +532,37 @@
             setTimeout(() => {
                 status.style.display = 'none';
             }, duration);
+        }
+
+        async function setZoom(zoomLevel) {
+            const video = document.getElementById('camera');
+            const stream = video.srcObject;
+            
+            if (!stream) return;
+
+            const track = stream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+            
+            // Check if zoom is supported
+            if (!capabilities.zoom) {
+                console.log('Zoom is not supported by this device');
+                return;
+            }
+
+            zoomLevel = Math.min(Math.max(zoomLevel, capabilities.zoom.min), capabilities.zoom.max);
+            
+            try {
+                await track.applyConstraints({
+                    advanced: [{ zoom: zoomLevel }]
+                });
+                currentZoom = zoomLevel;
+                
+                // Update UI
+                document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
+                document.getElementById('zoomSlider').value = zoomLevel;
+            } catch (error) {
+                console.error('Error setting zoom:', error);
+            }
         }
     </script>
     <script src="drive-upload.js"></script>

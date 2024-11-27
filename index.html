@@ -299,6 +299,13 @@
                     throw new Error('Selected camera not available');
                 }
 
+                // Stop any existing stream
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                }
+
                 const constraints = {
                     video: {
                         deviceId: { exact: cameras[currentCameraIndex].deviceId },
@@ -307,26 +314,25 @@
                     }
                 };
 
-                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 const video = document.getElementById('camera');
-                video.srcObject = currentStream;
-                
-                // Wait for video to be ready
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = resolve;
-                });
-                
-                await video.play();
+                video.srcObject = stream;
+                currentStream = stream;
 
-                // Check and setup flash capability
-                const track = currentStream.getVideoTracks()[0];
-                const capabilities = track.getCapabilities();
-                const flashButton = document.getElementById('flashButton');
-                flashButton.style.display = capabilities?.torch ? 'block' : 'none';
+                // Ensure video plays
+                await video.play();
                 
+                // Reset zoom and flash when switching cameras
+                currentZoom = 1;
+                isFlashOn = false;
+                
+                await setupCameraControls();
+                showStatus('Camera switched');
+
             } catch (error) {
                 console.error('Error starting camera:', error);
                 showStatus('Error starting camera: ' + error.message);
+                
                 // Try to recover by switching to first camera
                 if (currentCameraIndex !== 0) {
                     currentCameraIndex = 0;
@@ -403,18 +409,70 @@
                 if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
                     throw new Error('Camera API not supported');
                 }
-                
+
                 await getCameras();
                 
                 if (cameras.length === 0) {
                     throw new Error('No cameras found');
                 }
-                
-                await startCamera();
+
+                // Request camera permissions explicitly
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+
+                const video = document.getElementById('camera');
+                video.srcObject = stream;
+                currentStream = stream;
+
+                // Ensure video plays after metadata is loaded
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play()
+                            .then(resolve)
+                            .catch(e => console.error('Error playing video:', e));
+                    };
+                });
+
+                // Initialize camera controls after successful start
+                await setupCameraControls();
                 isInitialized = true;
+                showStatus('Camera ready');
+
             } catch (error) {
                 console.error('Camera initialization failed:', error);
-                showStatus('Camera initialization failed: ' + error.message);
+                showStatus('Failed to access camera: ' + error.message);
+            }
+        }
+
+        // Setup camera controls
+        async function setupCameraControls() {
+            const track = currentStream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+
+            // Setup flash control
+            const flashButton = document.getElementById('flashButton');
+            if (capabilities.torch) {
+                flashButton.style.display = 'block';
+                flashButton.addEventListener('click', toggleFlash);
+            } else {
+                flashButton.style.display = 'none';
+            }
+
+            // Setup zoom control
+            const zoomControls = document.querySelector('.zoom-controls');
+            if (capabilities.zoom) {
+                const zoomSlider = document.getElementById('zoomSlider');
+                zoomSlider.min = capabilities.zoom.min || 1;
+                zoomSlider.max = capabilities.zoom.max || 10;
+                zoomSlider.value = currentZoom;
+                zoomControls.style.display = 'flex';
+            } else {
+                zoomControls.style.display = 'none';
             }
         }
 

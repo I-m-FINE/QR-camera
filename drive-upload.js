@@ -44,24 +44,32 @@ window.uploadToGoogleDrive = async function(blob, type) {
 
         showStatus('Starting upload...');
 
-        // Handle authentication
-        if (!window.googleApi.state.tokenClient) {
-            throw new Error('Token client not initialized');
-        }
-
-        // Request token
+        // Request authentication first
         await new Promise((resolve, reject) => {
-            window.googleApi.state.tokenClient.callback = (resp) => {
-                if (resp.error) {
-                    reject(resp);
-                } else {
-                    resolve(resp);
+            try {
+                if (!window.googleApi.state.tokenClient) {
+                    reject(new Error('Token client not initialized'));
+                    return;
                 }
-            };
-            window.googleApi.state.tokenClient.requestAccessToken({prompt: 'consent'});
+
+                window.googleApi.state.tokenClient.callback = (response) => {
+                    if (response.error) {
+                        reject(response);
+                    } else {
+                        resolve(response);
+                    }
+                };
+
+                // Always request consent to ensure we have a valid token
+                window.googleApi.state.tokenClient.requestAccessToken({
+                    prompt: 'consent'
+                });
+            } catch (err) {
+                reject(err);
+            }
         });
 
-        // Prepare file metadata
+        // Now proceed with upload after authentication
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
 
@@ -73,7 +81,7 @@ window.uploadToGoogleDrive = async function(blob, type) {
             reader.readAsDataURL(blob);
         });
 
-        // Upload to Drive
+        // Create file on Google Drive
         const response = await gapi.client.drive.files.create({
             resource: {
                 name: fileName,
@@ -92,7 +100,7 @@ window.uploadToGoogleDrive = async function(blob, type) {
 
     } catch (error) {
         console.error('Upload error:', error);
-        showStatus('Upload failed. Please try again.');
+        showStatus('Upload failed: ' + error.message);
         throw error;
     }
 };

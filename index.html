@@ -731,41 +731,65 @@
             // ... your existing initialization code ...
         });
 
-        // Capture photo
+        // Simplified capture photo function with better button handling
         async function capturePhoto() {
-            if (isProcessing) return;
-            isProcessing = true;
+            const captureButton = document.getElementById('capture');
+            
+            // Check if button is already processing
+            if (isProcessing) {
+                return;
+            }
             
             try {
+                isProcessing = true;
+                captureButton.disabled = true; // Disable button during processing
+                
+                // Visual feedback
                 const shutterOverlay = document.querySelector('.shutter-overlay');
                 shutterOverlay.classList.add('shutter-animation');
                 showStatus('Taking photo...');
 
+                // Capture the photo
                 const video = document.getElementById('camera');
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                canvas.getContext('2d').drawImage(video, 0, 0);
                 
-                const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                const context = canvas.getContext('2d');
+                context.drawImage(video, 0, 0);
+                
+                // Convert to blob
+                const blob = await new Promise((resolve) => {
+                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
+                });
                 
                 if (!blob) {
                     throw new Error('Failed to create image');
                 }
 
+                // Update UI and upload
                 lastCaptureBlob = blob;
                 updatePreviewButton(blob);
-                await uploadToGoogleDrive(blob, 'image');
+                showStatus('Photo captured!');
                 
-                showStatus('Photo captured and uploaded!');
+                // Try to upload
+                try {
+                    await uploadToGoogleDrive(blob, 'image');
+                } catch (uploadError) {
+                    console.error('Upload failed:', uploadError);
+                    showStatus('Photo taken, but upload failed');
+                }
 
             } catch (error) {
                 console.error('Error capturing photo:', error);
-                showStatus('Failed to capture photo');
+                showStatus('Failed to take photo');
             } finally {
+                // Cleanup
                 isProcessing = false;
+                captureButton.disabled = false; // Re-enable button
+                
                 setTimeout(() => {
-                    shutterOverlay.classList.remove('shutter-animation');
+                    document.querySelector('.shutter-overlay').classList.remove('shutter-animation');
                 }, 500);
             }
         }
@@ -932,6 +956,33 @@
             document.getElementById('capture').addEventListener('click', capturePhoto);
             document.getElementById('recordButton').addEventListener('click', toggleRecording);
         });
+
+        // Make sure your button is properly styled
+        const style = document.createElement('style');
+        style.textContent = `
+            .button {
+                width: 100%;
+                padding: 12px;
+                border: none;
+                border-radius: 25px;
+                background: #2196F3;
+                color: white;
+                font-size: 16px;
+                font-weight: 500;
+                cursor: pointer;
+                transition: background-color 0.3s;
+            }
+
+            .button:disabled {
+                background: #ccc;
+                cursor: not-allowed;
+            }
+
+            .button:not(:disabled):hover {
+                background: #1976D2;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
     <script src="drive-upload.js"></script>
 </body>

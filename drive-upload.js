@@ -16,12 +16,15 @@ window.initGoogleApi = function() {
                     discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
                 });
 
+                await gapi.client.load('drive', 'v3');
+
                 window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
                     client_id: window.googleApiConfig.CLIENT_ID,
                     scope: window.googleApiConfig.SCOPES,
                     callback: (resp) => {
                         if (resp && resp.access_token) {
                             window.googleApi.state.accessToken = resp.access_token;
+                            gapi.client.setToken(resp);
                         }
                     },
                 });
@@ -52,11 +55,15 @@ window.uploadToGoogleDrive = async function(blob, type) {
                 window.googleApi.state.tokenClient.callback = (resp) => {
                     if (resp.error) {
                         reject(resp);
+                    } else {
+                        window.googleApi.state.accessToken = resp.access_token;
+                        gapi.client.setToken(resp);
+                        resolve(resp);
                     }
-                    window.googleApi.state.accessToken = resp.access_token;
-                    resolve(resp);
                 };
-                window.googleApi.state.tokenClient.requestAccessToken();
+                window.googleApi.state.tokenClient.requestAccessToken({
+                    prompt: type === 'video' ? 'consent' : ''
+                });
             } catch (err) {
                 reject(err);
             }

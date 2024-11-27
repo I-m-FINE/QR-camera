@@ -19,6 +19,8 @@
             color: #ffffff;
             min-height: 100vh;
             min-height: -webkit-fill-available;
+            display: flex;
+            flex-direction: column;
         }
 
         .container {
@@ -28,24 +30,28 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            gap: 16px;
+            padding: 16px;
+            position: relative;
         }
 
         h1 {
             font-size: 24px;
             font-weight: 600;
             color: #ffffff;
-            padding: 16px;
             text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
         }
 
         .camera-container {
-            position: relative;
             width: 100%;
             flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background-color: #1a1a1a;
+            position: relative;
+            background-color: #2a2a2a;
+            overflow: hidden;
+            border-radius: 16px;
+            margin-bottom: 80px; /* Space for zoom controls */
         }
 
         #camera {
@@ -55,81 +61,68 @@
         }
 
         .button-container {
-            position: absolute;
-            bottom: 80px;
-            left: 0;
-            right: 0;
+            width: 100%;
             display: flex;
             flex-direction: column;
             align-items: center;
             gap: 12px;
             padding: 0 16px;
-            z-index: 2;
+            position: absolute;
+            bottom: 100px; /* Position above zoom controls */
         }
 
         .button {
             width: 100%;
             max-width: 200px;
-            padding: 12px 0;
+            padding: 14px 24px;
             border: none;
-            border-radius: 25px;
+            border-radius: 30px;
             background-color: #2196F3;
             color: white;
             font-size: 16px;
-            font-weight: 500;
+            font-weight: 600;
             cursor: pointer;
-        }
-
-        .zoom-controls {
-            position: absolute;
-            bottom: 20px;
-            left: 0;
-            right: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 8px;
-            padding: 0 16px;
-            z-index: 2;
-        }
-
-        .zoom-button {
-            background: rgba(45, 45, 45, 0.9);
-            border: none;
-            color: white;
-            padding: 8px 16px;
-            border-radius: 20px;
-            cursor: pointer;
-            font-size: 14px;
-            min-width: 50px;
             text-align: center;
         }
 
-        #zoomSlider {
-            width: 150px;
-            margin: 0 8px;
-            -webkit-appearance: none;
-            height: 4px;
-            background: #ffffff;
-            border-radius: 2px;
+        .zoom-controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 16px;
+            border-radius: 20px;
+            z-index: 100;
+            width: auto;
         }
 
-        #zoomSlider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 16px;
-            height: 16px;
-            background: #2196F3;
-            border-radius: 50%;
+        .zoom-button {
+            background: rgba(255, 255, 255, 0.2);
+            border: none;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 15px;
             cursor: pointer;
+            font-size: 14px;
+        }
+
+        .zoom-button:active {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        #zoomSlider {
+            width: 120px;
+            margin: 0 8px;
         }
 
         #zoomLevel {
             color: white;
             min-width: 40px;
             text-align: center;
-            background: rgba(45, 45, 45, 0.9);
-            padding: 8px 16px;
-            border-radius: 20px;
         }
 
         /* Preview elements */
@@ -141,37 +134,50 @@
             height: 100%;
             object-fit: contain;
             display: none;
+            background-color: #2a2a2a;
         }
 
+        /* Hide canvas */
         #canvas {
             display: none;
         }
 
-        /* Camera controls */
-        .camera-controls {
-            position: absolute;
-            top: 16px;
-            right: 16px;
-            display: flex;
-            gap: 12px;
-        }
-
-        .control-button {
-            width: 40px;
-            height: 40px;
-            border-radius: 50%;
-            background: rgba(45, 45, 45, 0.9);
-            border: none;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
         /* iOS specific fixes */
         @supports (-webkit-touch-callout: none) {
-            body, .container {
+            body {
                 height: -webkit-fill-available;
+            }
+            .container {
+                height: -webkit-fill-available;
+            }
+        }
+
+        /* Landscape mode adjustments */
+        @media screen and (orientation: landscape) {
+            .container {
+                flex-direction: row;
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
+            }
+
+            .button-container {
+                position: relative;
+                bottom: auto;
+                right: 20px;
+                width: auto;
+            }
+
+            .zoom-controls {
+                flex-direction: column;
+                left: auto;
+                right: 20px;
+                bottom: 50%;
+                transform: translateY(50%);
+            }
+
+            h1 {
+                writing-mode: vertical-lr;
+                transform: rotate(180deg);
+                margin: 0 16px;
             }
         }
     </style>
@@ -561,6 +567,83 @@
             document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
             document.getElementById('zoomSlider').value = zoomLevel;
         }
+
+        async function initializeCamera() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: currentFacingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+                
+                const video = document.getElementById('camera');
+                video.srcObject = stream;
+                currentStream = stream;
+                
+                // Initialize flash capability
+                const track = stream.getVideoTracks()[0];
+                const capabilities = track.getCapabilities();
+                
+                // Show/hide flash button based on capability
+                const flashButton = document.getElementById('flashButton');
+                flashButton.style.display = capabilities.torch ? 'block' : 'none';
+                
+                await video.play();
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                alert('Error accessing camera. Please check permissions.');
+            }
+        }
+
+        // Update your toggleFlash function
+        async function toggleFlash() {
+            if (!currentStream) return;
+            
+            const track = currentStream.getVideoTracks()[0];
+            const capabilities = track.getCapabilities();
+            
+            if (!capabilities.torch) {
+                alert('Flash not supported on this device');
+                return;
+            }
+            
+            isFlashOn = !isFlashOn;
+            try {
+                await track.applyConstraints({
+                    advanced: [{ torch: isFlashOn }]
+                });
+                document.getElementById('flashButton').classList.toggle('active', isFlashOn);
+            } catch (error) {
+                console.error('Error toggling flash:', error);
+                alert('Error toggling flash');
+            }
+        }
+
+        // Initialize everything when the page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            await initializeCamera();
+            
+            // Add event listeners for all controls
+            document.getElementById('flashButton').addEventListener('click', toggleFlash);
+            document.getElementById('switchCamera').addEventListener('click', async () => {
+                currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+                await initializeCamera();
+            });
+            
+            // Add zoom control listeners
+            document.querySelectorAll('.zoom-button').forEach(button => {
+                button.addEventListener('click', () => {
+                    const zoom = parseFloat(button.dataset.zoom);
+                    setZoom(zoom);
+                });
+            });
+            
+            document.getElementById('zoomSlider').addEventListener('input', (e) => {
+                setZoom(parseFloat(e.target.value));
+            });
+        });
     </script>
     <script src="drive-upload.js"></script>
 </body>

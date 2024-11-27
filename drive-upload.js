@@ -7,36 +7,36 @@ window.googleApi = {
     }
 };
 
-window.initGoogleApi = async function() {
-    try {
-        await new Promise((resolve) => {
-            gapi.load('client', resolve);
-        });
+window.initGoogleApi = function() {
+    return new Promise((resolve, reject) => {
+        gapi.load('client', async () => {
+            try {
+                await gapi.client.init({
+                    apiKey: window.googleApiConfig.API_KEY,
+                    discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
+                });
 
-        await gapi.client.init({
-            apiKey: window.googleApiConfig.API_KEY,
-            discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
-        });
+                window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
+                    client_id: window.googleApiConfig.CLIENT_ID,
+                    scope: window.googleApiConfig.SCOPES,
+                    callback: (resp) => {
+                        if (resp && resp.access_token) {
+                            window.googleApi.state.accessToken = resp.access_token;
+                        }
+                    },
+                });
 
-        window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
-            client_id: window.googleApiConfig.CLIENT_ID,
-            scope: window.googleApiConfig.SCOPES,
-            callback: (resp) => {
-                if (resp && resp.access_token) {
-                    window.googleApi.state.accessToken = resp.access_token;
-                }
-            },
+                window.googleApi.state.gapiInited = true;
+                window.googleApi.state.gisInited = true;
+                
+                console.log('Google API initialized successfully');
+                resolve(true);
+            } catch (error) {
+                console.error('Failed to initialize Google API:', error);
+                reject(error);
+            }
         });
-
-        window.googleApi.state.gapiInited = true;
-        window.googleApi.state.gisInited = true;
-        
-        console.log('Google API initialized successfully');
-        return true;
-    } catch (error) {
-        console.error('Failed to initialize Google API:', error);
-        return false;
-    }
+    });
 };
 
 window.uploadToGoogleDrive = async function(blob, type) {
@@ -90,6 +90,10 @@ window.uploadToGoogleDrive = async function(blob, type) {
     }
 };
 
-document.addEventListener('DOMContentLoaded', window.initGoogleApi);
+document.addEventListener('DOMContentLoaded', () => {
+    window.initGoogleApi()
+        .then(() => console.log('Google API initialized on page load'))
+        .catch(error => console.error('Failed to initialize Google API:', error));
+});
 
 console.log('Drive upload script loaded successfully');

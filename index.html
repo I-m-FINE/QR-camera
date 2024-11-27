@@ -162,6 +162,37 @@
                 margin: 0 16px;
             }
         }
+
+        .preview-button {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 25px;
+            border: 2px solid white;
+            padding: 0;
+            overflow: hidden;
+            background: none;
+        }
+
+        .preview-button img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        #preview, #videoPreview {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            background-color: rgba(0, 0, 0, 0.8);
+            display: none;
+            z-index: 1000;
+        }
     </style>
 </head>
 <body>
@@ -249,6 +280,8 @@
         let currentCameraIndex = 0;
         let isInitialized = false;
         let isProcessing = false; // Prevent multiple simultaneous operations
+        let lastCaptureBlob = null;
+        let isPreviewVisible = false;
 
         async function getCameras() {
             try {
@@ -547,31 +580,22 @@
             
             try {
                 const video = document.getElementById('camera');
-                const canvas = document.getElementById('canvas');
-                const preview = document.getElementById('preview');
-                
-                if (!video.srcObject || video.videoWidth === 0) {
-                    throw new Error('Camera not ready');
-                }
-
+                const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(video, 0, 0);
+                canvas.getContext('2d').drawImage(video, 0, 0);
                 
-                const blob = await new Promise((resolve) => {
-                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
-                });
+                const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.8));
                 
                 if (!blob) {
                     throw new Error('Failed to create image');
                 }
 
-                imageBlob = blob;
-                preview.src = URL.createObjectURL(blob);
-                preview.style.display = 'block';
-                document.getElementById('upload').style.display = 'block';
+                lastCaptureBlob = blob;
+                updatePreviewButton(blob);
+                await uploadCapture(blob, 'image');
                 
+                showStatus('Photo captured and uploaded');
             } catch (error) {
                 console.error('Error capturing photo:', error);
                 showStatus('Failed to capture photo');
@@ -580,51 +604,62 @@
             }
         }
 
+        function updatePreviewButton(blob) {
+            const previewButton = document.getElementById('previewButton');
+            const previewThumbnail = document.getElementById('previewThumbnail');
+            previewThumbnail.src = URL.createObjectURL(blob);
+            previewButton.style.display = 'block';
+        }
+
+        function togglePreview() {
+            const preview = document.getElementById('preview');
+            const videoPreview = document.getElementById('videoPreview');
+            
+            if (isPreviewVisible) {
+                preview.style.display = 'none';
+                videoPreview.style.display = 'none';
+                isPreviewVisible = false;
+            } else {
+                if (lastCaptureBlob.type.startsWith('image/')) {
+                    preview.src = URL.createObjectURL(lastCaptureBlob);
+                    preview.style.display = 'block';
+                    videoPreview.style.display = 'none';
+                } else {
+                    videoPreview.src = URL.createObjectURL(lastCaptureBlob);
+                    videoPreview.style.display = 'block';
+                    preview.style.display = 'none';
+                }
+                isPreviewVisible = true;
+            }
+        }
+
         // Improved video recording
-        function toggleRecording() {
+        async function toggleRecording() {
             if (isProcessing) return;
             isProcessing = true;
             
             try {
                 const recordButton = document.getElementById('recordButton');
                 
-                if (!currentStream) {
-                    throw new Error('Camera not ready');
-                }
-
                 if (!mediaRecorder || mediaRecorder.state === 'inactive') {
                     recordedChunks = [];
-                    mediaRecorder = new MediaRecorder(currentStream, {
-                        mimeType: 'video/webm;codecs=vp8,opus'
-                    });
+                    mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8,opus' });
                     
                     mediaRecorder.ondataavailable = (e) => {
-                        if (e.data.size > 0) {
-                            recordedChunks.push(e.data);
-                        }
+                        if (e.data.size > 0) recordedChunks.push(e.data);
                     };
                     
-                    mediaRecorder.onstop = () => {
-                        try {
-                            if (recordedChunks.length === 0) {
-                                throw new Error('No video data recorded');
-                            }
-                            
-                            videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                            const videoPreview = document.getElementById('videoPreview');
-                            videoPreview.src = URL.createObjectURL(videoBlob);
-                            videoPreview.style.display = 'block';
-                            document.getElementById('upload').style.display = 'block';
-                        } catch (error) {
-                            console.error('Error processing recording:', error);
-                            showStatus('Failed to process recording');
-                        }
+                    mediaRecorder.onstop = async () => {
+                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        lastCaptureBlob = blob;
+                        updatePreviewButton(blob);
+                        await uploadCapture(blob, 'video');
+                        showStatus('Video recorded and uploaded');
                     };
                     
                     mediaRecorder.start();
                     recordButton.textContent = 'Stop Recording';
                     recordButton.classList.add('recording');
-                    
                 } else {
                     mediaRecorder.stop();
                     recordButton.textContent = 'Record Video';
@@ -635,6 +670,27 @@
                 showStatus('Failed to toggle recording');
             } finally {
                 isProcessing = false;
+            }
+        }
+
+        async function uploadCapture(blob, type) {
+            // Implement your upload logic here
+            // For example:
+            try {
+                const formData = new FormData();
+                formData.append('file', blob, `capture.${type === 'image' ? 'jpg' : 'webm'}`);
+                
+                const response = await fetch('/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to upload capture');
+                }
+            } catch (error) {
+                console.error('Error uploading capture:', error);
+                showStatus('Failed to upload capture');
             }
         }
 

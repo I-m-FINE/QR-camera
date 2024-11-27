@@ -223,6 +223,15 @@
                 transform: translateY(50%);
             }
         }
+
+        .camera-container {
+            overflow: hidden !important;
+        }
+        
+        #camera {
+            transform-origin: center;
+            transition: transform 0.2s ease-out;
+        }
     </style>
 </head>
 <body>
@@ -282,33 +291,13 @@
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
-                // Debug: Log camera capabilities
-                const track = stream.getVideoTracks()[0];
-                console.log('Track capabilities:', track.getCapabilities());
-                console.log('Track settings:', track.getSettings());
-                console.log('Track constraints:', track.getConstraints());
-
-                // Initialize zoom capabilities
-                const capabilities = track.getCapabilities();
-                const settings = track.getSettings();
-
-                // Update zoom controls based on device capabilities
+                // Show zoom controls
+                document.querySelector('.zoom-controls').style.display = 'flex';
+                
+                // Initialize zoom slider
                 const zoomSlider = document.getElementById('zoomSlider');
-                const zoomControls = document.querySelector('.zoom-controls');
-
-                if (capabilities && capabilities.zoom) {
-                    console.log('Zoom is supported! Range:', capabilities.zoom.min, 'to', capabilities.zoom.max);
-                    zoomControls.style.display = 'flex';
-                    zoomSlider.min = capabilities.zoom.min;
-                    zoomSlider.max = capabilities.zoom.max;
-                    zoomSlider.value = settings.zoom || 1;
-                    
-                    // Update current zoom display
-                    document.getElementById('zoomLevel').textContent = `${(settings.zoom || 1).toFixed(1)}x`;
-                } else {
-                    console.log('Zoom is NOT supported on this device');
-                    zoomControls.style.display = 'none';
-                }
+                zoomSlider.value = 1;
+                document.getElementById('zoomLevel').textContent = '1x';
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
@@ -371,18 +360,15 @@
 
             // Add zoom controls event listeners
             document.querySelectorAll('.zoom-button').forEach(button => {
-                button.addEventListener('click', async () => {
+                button.addEventListener('click', () => {
                     const zoomLevel = parseFloat(button.dataset.zoom);
-                    console.log('Zoom button clicked:', zoomLevel); // Debug log
-                    await setZoom(zoomLevel);
+                    setZoom(zoomLevel);
                 });
             });
 
             const zoomSlider = document.getElementById('zoomSlider');
-            zoomSlider.addEventListener('input', async (e) => {
-                const zoomLevel = parseFloat(e.target.value);
-                console.log('Slider value changed:', zoomLevel); // Debug log
-                await setZoom(zoomLevel);
+            zoomSlider.addEventListener('input', (e) => {
+                setZoom(parseFloat(e.target.value));
             });
         });
 
@@ -545,39 +531,20 @@
             }, duration);
         }
 
-        async function setZoom(zoomLevel) {
-            if (!currentStream) return;
-
-            const track = currentStream.getVideoTracks()[0];
-            if (!track) return;
-
-            const capabilities = track.getCapabilities();
+        function setZoom(zoomLevel) {
+            const video = document.getElementById('camera');
+            const container = document.querySelector('.camera-container');
             
-            // Check if zoom is supported
-            if (!capabilities.zoom) {
-                console.log('Zoom is not supported by this device');
-                return;
-            }
-
             // Ensure zoom level is within valid range
-            zoomLevel = Math.min(Math.max(zoomLevel, capabilities.zoom.min), capabilities.zoom.max);
+            zoomLevel = Math.min(Math.max(zoomLevel, 0.5), 10);
+            currentZoom = zoomLevel;
+
+            // Apply CSS transform for zoom effect
+            video.style.transform = `scale(${zoomLevel})`;
             
-            try {
-                const constraints = {
-                    advanced: [{zoom: zoomLevel}]
-                };
-                
-                await track.applyConstraints(constraints);
-                currentZoom = zoomLevel;
-                
-                // Update UI
-                document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
-                document.getElementById('zoomSlider').value = zoomLevel;
-                
-                console.log('Zoom set to:', zoomLevel); // Debug log
-            } catch (error) {
-                console.error('Error setting zoom:', error);
-            }
+            // Update UI
+            document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
+            document.getElementById('zoomSlider').value = zoomLevel;
         }
     </script>
     <script src="drive-upload.js"></script>

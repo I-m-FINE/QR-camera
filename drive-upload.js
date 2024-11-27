@@ -9,17 +9,19 @@ window.googleApi = {
 window.initGoogleApi = async function() {
     try {
         await new Promise((resolve, reject) => {
-            gapi.load('client', {
+            gapi.load('client:auth2', {
                 callback: resolve,
-                onerror: () => reject('GAPI client failed to load'),
-                timeout: 5000, // 5 seconds
+                onerror: () => reject('Failed to load GAPI client'),
+                timeout: 5000,
                 ontimeout: () => reject('GAPI client load timeout')
             });
         });
 
         await gapi.client.init({
             apiKey: window.googleApiConfig.API_KEY,
+            clientId: window.googleApiConfig.CLIENT_ID,
             discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
+            scope: window.googleApiConfig.SCOPES
         });
 
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
@@ -31,10 +33,22 @@ window.initGoogleApi = async function() {
         window.googleApi.state.gapiInited = true;
         window.googleApi.state.gisInited = true;
         
+        if (!gapi.auth2.getAuthInstance().isSignedIn.get()) {
+            await new Promise((resolve, reject) => {
+                window.googleApi.state.tokenClient.callback = (resp) => {
+                    if (resp.error) reject(resp);
+                    else resolve(resp);
+                };
+                window.googleApi.state.tokenClient.requestAccessToken({ prompt: 'consent' });
+            });
+        }
+
         console.log('Google API initialized successfully');
         return true;
     } catch (error) {
         console.error('Failed to initialize Google API:', error);
+        window.googleApi.state.gapiInited = false;
+        window.googleApi.state.gisInited = false;
         return false;
     }
 };

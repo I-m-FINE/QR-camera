@@ -10,19 +10,21 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
         body {
-            font-family: Arial, sans-serif;
-            background-color: #f0f0f0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+            background-color: #1a1a1a;
+            color: #ffffff;
+            min-height: 100vh;
         }
 
         .container {
             width: 100%;
             max-width: 800px;
             margin: 0 auto;
-            padding: 15px;
-            text-align: center;
+            padding: 16px;
             display: flex;
             flex-direction: column;
             align-items: center;
@@ -31,41 +33,71 @@
 
         h1 {
             font-size: 24px;
-            margin-bottom: 20px;
-            color: #333;
+            font-weight: 600;
+            margin: 16px 0;
+            color: #ffffff;
+            text-transform: uppercase;
+            letter-spacing: 1px;
         }
 
         #camera {
             width: 100%;
             max-width: 500px;
-            margin: 10px 0;
-            border-radius: 10px;
+            border-radius: 16px;
+            margin: 16px 0;
+            background-color: #2a2a2a;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
         }
 
         .button-container {
             display: flex;
             flex-wrap: wrap;
             justify-content: center;
-            gap: 10px;
-            margin: 15px 0;
+            gap: 12px;
+            margin: 20px 0;
             width: 100%;
-            padding: 0 10px;
+            max-width: 500px;
+            padding: 0 16px;
         }
 
         .button {
-            padding: 12px 20px;
-            background-color: #4CAF50;
-            color: white;
+            padding: 14px 24px;
             border: none;
-            border-radius: 25px;
+            border-radius: 30px;
             cursor: pointer;
             font-size: 16px;
-            min-width: 120px;
-            transition: background-color 0.3s;
+            font-weight: 600;
+            min-width: 130px;
+            transition: all 0.3s ease;
+            background-color: #2196F3;
+            color: white;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            position: relative;
+            overflow: hidden;
         }
 
         .button:active {
-            transform: scale(0.98);
+            transform: scale(0.96);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+
+        .button::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(rgba(255,255,255,0.1), transparent);
+            pointer-events: none;
+        }
+
+        #switchCamera {
+            background-color: #607D8B;
+        }
+
+        #capture {
+            background-color: #4CAF50;
         }
 
         #recordButton {
@@ -74,37 +106,105 @@
 
         #recordButton.recording {
             background-color: #9e9e9e;
+            animation: pulse 2s infinite;
+        }
+
+        #upload {
+            background-color: #FF9800;
+        }
+
+        .button:disabled {
+            opacity: 0.7;
+            cursor: not-allowed;
         }
 
         #preview, #videoPreview {
             width: 100%;
             max-width: 500px;
-            margin: 15px 0;
+            margin: 16px 0;
             display: none;
-            border-radius: 10px;
-            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            border-radius: 16px;
+            box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            background-color: #2a2a2a;
         }
 
-        /* Media queries for different screen sizes */
+        @keyframes pulse {
+            0% { opacity: 1; }
+            50% { opacity: 0.7; }
+            100% { opacity: 1; }
+        }
+
+        /* Loading indicator for upload */
+        .button.loading {
+            position: relative;
+            color: transparent;
+        }
+
+        .button.loading::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-radius: 50%;
+            border-top-color: white;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: translate(-50%, -50%) rotate(360deg); }
+        }
+
+        /* Media queries */
         @media (max-width: 480px) {
             .container {
-                padding: 10px;
+                padding: 12px;
             }
 
             h1 {
                 font-size: 20px;
+                margin: 12px 0;
             }
 
             .button {
-                padding: 10px 15px;
-                font-size: 14px;
-                min-width: 100px;
+                padding: 12px 20px;
+                font-size: 15px;
+                min-width: 110px;
+            }
+
+            .button-container {
+                gap: 8px;
+                padding: 0 12px;
             }
 
             #camera, #preview, #videoPreview {
-                max-width: 100%;
-                margin: 8px 0;
+                border-radius: 12px;
+                margin: 12px 0;
             }
+        }
+
+        /* Status message styling */
+        .status-message {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background-color: rgba(33, 33, 33, 0.95);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 30px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+            z-index: 1000;
+            display: none;
+            animation: slideDown 0.3s ease;
+        }
+
+        @keyframes slideDown {
+            from { transform: translate(-50%, -100%); opacity: 0; }
+            to { transform: translate(-50%, 0); opacity: 1; }
         }
     </style>
 </head>
@@ -122,6 +222,7 @@
         <img id="preview" alt="Preview">
         <video id="videoPreview" controls></video>
     </div>
+    <div class="status-message" id="statusMessage"></div>
 
     <script>
         let imageBlob = null;
@@ -139,10 +240,18 @@
                 }
 
                 const stream = await navigator.mediaDevices.getUserMedia({ 
-                    video: { facingMode: facingMode }
+                    video: { facingMode: facingMode },
+                    audio: false // Explicitly disable audio to prevent permissions issues
                 });
                 video.srcObject = stream;
                 currentFacingMode = facingMode;
+                
+                // Ensure video plays
+                try {
+                    await video.play();
+                } catch (playError) {
+                    console.error('Error playing video:', playError);
+                }
             } catch (err) {
                 console.error('Error accessing camera:', err);
                 alert('Unable to access camera. Please make sure you have given permission.');
@@ -239,17 +348,30 @@
             if (imageBlob || videoBlob) {
                 const uploadBtn = document.getElementById('upload');
                 uploadBtn.disabled = true;
-                uploadBtn.textContent = 'Uploading...';
+                uploadBtn.classList.add('loading');
                 try {
                     await uploadToDrive(imageBlob || videoBlob, videoBlob ? 'video' : 'image');
+                    showStatus(`${videoBlob ? 'Video' : 'Photo'} uploaded successfully!`);
                     uploadBtn.textContent = 'Upload to Drive';
+                    uploadBtn.style.display = 'none';
+                    
+                    // Clear previews
+                    const preview = document.getElementById('preview');
+                    const videoPreview = document.getElementById('videoPreview');
+                    preview.style.display = 'none';
+                    videoPreview.style.display = 'none';
+                    
+                    // Reset blobs
                     imageBlob = null;
                     videoBlob = null;
+                    
+                    // Restart camera with current facing mode
+                    await startCamera(currentFacingMode);
                 } catch (error) {
-                    console.error('Upload failed:', error);
-                    alert('Upload failed. Please try again.');
+                    showStatus('Upload failed. Please try again.', 5000);
                 } finally {
                     uploadBtn.disabled = false;
+                    uploadBtn.classList.remove('loading');
                 }
             }
         });
@@ -269,6 +391,17 @@
                 video.srcObject.getTracks().forEach(track => track.stop());
             }
         });
+
+        // Function to show status message
+        function showStatus(message, duration = 3000) {
+            const status = document.getElementById('statusMessage');
+            status.textContent = message;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, duration);
+        }
     </script>
     <script src="drive-upload.js"></script>
 </body>

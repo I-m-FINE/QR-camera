@@ -9,7 +9,8 @@ window.googleApi = {
     state: {
         tokenClient: null,
         gapiInited: false,
-        accessToken: null
+        accessToken: null,
+        folderId: '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'
     }
 };
 
@@ -84,7 +85,6 @@ window.uploadToGoogleDrive = async function(blob, type) {
                     resolve(resp);
                 };
 
-                // Use immediate mode first
                 tokenClient.requestAccessToken({ prompt: '' });
             } catch (err) {
                 reject(err);
@@ -108,18 +108,41 @@ window.uploadToGoogleDrive = async function(blob, type) {
 
         debugLog('File converted to base64, starting upload');
 
+        // Create file metadata with parent folder
+        const fileMetadata = {
+            name: fileName,
+            mimeType: mimeType,
+            parents: [window.googleApi.state.folderId]
+        };
+
         // Upload file
         const response = await gapi.client.drive.files.create({
-            resource: { 
-                name: fileName,
-                mimeType: mimeType
-            },
+            resource: fileMetadata,
             media: {
                 mimeType: mimeType,
                 body: base64Data
             },
-            fields: 'id,webViewLink'
+            fields: 'id,webViewLink,size,mimeType'
         });
+
+        debugLog('Upload response:', response);
+
+        // Verify upload
+        if (!response.result || !response.result.id) {
+            throw new Error('Upload failed - no file ID received');
+        }
+
+        // Verify file size
+        const file = await gapi.client.drive.files.get({
+            fileId: response.result.id,
+            fields: 'size,mimeType'
+        });
+
+        debugLog('File details:', file.result);
+
+        if (!file.result.size || file.result.size === '0') {
+            throw new Error('Upload failed - file size is 0');
+        }
 
         debugLog('Upload successful:', response.result);
         

@@ -211,7 +211,8 @@
     <script>
         // Debug logging
         function debugLog(message, data = null) {
-            console.log(`[Camera Debug] ${message}`, data || '');
+            const timestamp = new Date().toISOString();
+            console.log(`[${timestamp}] ${message}`, data || '');
         }
 
         // Global variables
@@ -219,18 +220,6 @@
         let mediaRecorder = null;
         let recordedChunks = [];
         let isProcessing = false;
-
-        // Check camera permissions
-        async function checkCameraPermissions() {
-            try {
-                const result = await navigator.permissions.query({ name: 'camera' });
-                debugLog('Camera permission status:', result.state);
-                return result.state;
-            } catch (error) {
-                debugLog('Error checking camera permissions:', error);
-                return 'unknown';
-            }
-        }
 
         // Initialize camera
         async function startCamera() {
@@ -242,62 +231,38 @@
                     throw new Error('Camera API not supported in this browser');
                 }
 
-                // Check permissions
-                const permissionStatus = await checkCameraPermissions();
-                debugLog('Permission status:', permissionStatus);
-
-                // Stop any existing stream
-                if (currentStream) {
-                    currentStream.getTracks().forEach(track => {
-                        track.stop();
-                        debugLog('Stopped existing track:', track.label);
-                    });
-                }
-
-                // List available devices
-                const devices = await navigator.mediaDevices.enumerateDevices();
-                const videoDevices = devices.filter(device => device.kind === 'videoinput');
-                debugLog('Available video devices:', videoDevices);
-
                 // Request camera access
                 const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    },
+                    video: true,  // Simplified constraints for initial testing
                     audio: false
                 };
 
-                debugLog('Requesting camera with constraints:', constraints);
+                debugLog('Requesting camera access');
                 currentStream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                // Get video element
                 const videoElement = document.getElementById('camera');
                 if (!videoElement) {
                     throw new Error('Video element not found');
                 }
 
-                // Set video source
                 videoElement.srcObject = currentStream;
-                videoElement.setAttribute('playsinline', true);
-                videoElement.setAttribute('autoplay', true);
+                videoElement.setAttribute('playsinline', '');
+                videoElement.setAttribute('autoplay', '');
                 
-                // Wait for video to be ready
-                await new Promise((resolve) => {
-                    videoElement.onloadedmetadata = () => {
-                        debugLog('Video metadata loaded');
-                        resolve();
-                    };
-                });
-
-                // Play video
-                await videoElement.play();
-                debugLog('Camera started successfully');
-                showStatus('Camera ready');
+                debugLog('Camera stream set to video element');
+                
+                // Ensure video plays
+                try {
+                    await videoElement.play();
+                    debugLog('Camera started successfully');
+                    showStatus('Camera ready');
+                } catch (playError) {
+                    debugLog('Error playing video:', playError);
+                    throw new Error('Failed to play video stream');
+                }
 
             } catch (error) {
-                debugLog('Error starting camera:', error);
+                debugLog('Camera initialization error:', error);
                 showStatus('Camera error: ' + error.message);
                 throw error;
             }
@@ -316,65 +281,110 @@
             }
         }
 
-        // Initialize on page load
-        document.addEventListener('DOMContentLoaded', async () => {
-            debugLog('Page loaded, initializing camera');
-            
-            try {
-                await startCamera();
-                
-                // Add button listeners after camera is initialized
-                const switchButton = document.getElementById('switchCamera');
-                if (switchButton) {
-                    switchButton.addEventListener('click', async () => {
-                        debugLog('Switch camera clicked');
-                        try {
-                            await startCamera();
-                        } catch (error) {
-                            debugLog('Switch camera error:', error);
-                            showStatus('Failed to switch camera');
-                        }
+        // Add upload button to HTML
+        const uploadButtonHtml = `
+            <button id="uploadPhoto" class="control-button" style="display: none;">
+                <i class="fas fa-cloud-upload-alt"></i>
+            </button>
+        `;
+        document.querySelector('.camera-controls').insertAdjacentHTML('beforeend', uploadButtonHtml);
+
+        // Initialize when document is ready
+        document.addEventListener('DOMContentLoaded', function() {
+            debugLog('Document ready, starting camera');
+            startCamera().catch(error => {
+                debugLog('Failed to initialize camera:', error);
+                showStatus('Camera initialization failed');
+            });
+
+            // Capture button listener
+            document.getElementById('capture')?.addEventListener('click', async () => {
+                if (isProcessing) return;
+                isProcessing = true;
+
+                try {
+                    const video = document.getElementById('camera');
+                    const canvas = document.createElement('canvas');
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    
+                    const context = canvas.getContext('2d');
+                    context.drawImage(video, 0, 0);
+                    
+                    const capturedBlob = await new Promise((resolve) => {
+                        canvas.toBlob(resolve, 'image/jpeg', 0.8);
                     });
+
+                    if (!window.capturedMedia) window.capturedMedia = {};
+                    window.capturedMedia.currentPhoto = capturedBlob;
+                    
+                    debugLog('Photo captured', { size: capturedBlob.size });
+                    showStatus('Photo captured');
+
+                    // Show upload button
+                    const uploadButton = document.getElementById('uploadPhoto');
+                    if (uploadButton) {
+                        uploadButton.style.display = 'block';
+                    }
+                } catch (error) {
+                    debugLog('Photo capture error:', error);
+                    showStatus('Failed to capture photo');
+                } finally {
+                    isProcessing = false;
                 }
+            });
 
-                const captureButton = document.getElementById('capture');
-                if (captureButton) {
-                    captureButton.addEventListener('click', async () => {
-                        debugLog('Capture button clicked');
-                        if (isProcessing) return;
-                        isProcessing = true;
+            // Upload button listener
+            document.getElementById('uploadPhoto')?.addEventListener('click', async () => {
+                try {
+                    debugLog('Starting upload process');
+                    if (!window.capturedMedia?.currentPhoto) {
+                        throw new Error('No photo to upload');
+                    }
 
-                        try {
-                            const video = document.getElementById('camera');
-                            const canvas = document.createElement('canvas');
-                            canvas.width = video.videoWidth;
-                            canvas.height = video.videoHeight;
-                            
-                            const context = canvas.getContext('2d');
-                            context.drawImage(video, 0, 0);
-                            
-                            const capturedBlob = await new Promise((resolve) => {
-                                canvas.toBlob(resolve, 'image/jpeg', 0.8);
-                            });
+                    showStatus('Uploading photo...');
+                    const result = await window.uploadToGoogleDrive(
+                        window.capturedMedia.currentPhoto,
+                        'image'
+                    );
+                    
+                    debugLog('Upload result:', result);
+                    showStatus('Photo uploaded successfully');
 
-                            window.capturedMedia = window.capturedMedia || {};
-                            window.capturedMedia.currentPhoto = capturedBlob;
-                            debugLog('Photo captured', { size: capturedBlob.size });
-                            
-                            showStatus('Photo captured');
-                        } catch (error) {
-                            debugLog('Capture error:', error);
-                            showStatus('Failed to capture photo');
-                        } finally {
-                            isProcessing = false;
-                        }
-                    });
+                    // Hide upload button after successful upload
+                    const uploadButton = document.getElementById('uploadPhoto');
+                    if (uploadButton) {
+                        uploadButton.style.display = 'none';
+                    }
+
+                    // Clear the captured photo
+                    window.capturedMedia.currentPhoto = null;
+
+                } catch (error) {
+                    debugLog('Upload error:', error);
+                    showStatus('Upload failed: ' + error.message);
                 }
-            } catch (error) {
-                debugLog('Initialization error:', error);
-                showStatus('Failed to initialize camera');
-            }
+            });
         });
+
+        // Add some CSS for the upload button
+        const style = document.createElement('style');
+        style.textContent = `
+            #uploadPhoto {
+                background: #2196F3;
+                border-color: #1976D2;
+                display: none;
+            }
+
+            #uploadPhoto:hover {
+                background: #1976D2;
+            }
+
+            #uploadPhoto.visible {
+                display: flex;
+            }
+        `;
+        document.head.appendChild(style);
 
         // Handle page visibility
         document.addEventListener('visibilitychange', () => {

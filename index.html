@@ -867,25 +867,23 @@
         if (isIOS) {
             document.body.classList.add('ios-device');
             
-            // Prevent default touch behaviors
-            document.addEventListener('touchmove', (e) => {
-                if (e.touches.length > 1) {
-                    e.preventDefault();
-                }
-            }, { passive: false });
-
-            // Lock UI orientation for iOS
+            // Lock UI orientation
             function lockUIOrientation() {
                 const container = document.querySelector('.container');
                 const controls = document.querySelector('.button-container');
                 const zoom = document.querySelector('.zoom-controls');
 
-                container.style.height = '100vh';
+                // Force portrait layout
                 container.style.height = '-webkit-fill-available';
                 
-                // Force controls to stay in portrait orientation
-                controls.style.position = 'fixed';
-                zoom.style.position = 'fixed';
+                // Update control positions based on orientation
+                if (window.matchMedia("(orientation: landscape)").matches) {
+                    controls.style.right = `max(20px, env(safe-area-inset-right))`;
+                    zoom.style.right = `max(120px, env(safe-area-inset-right))`;
+                } else {
+                    controls.style.right = '0';
+                    zoom.style.right = 'auto';
+                }
             }
 
             // Initialize and update on orientation change
@@ -893,6 +891,13 @@
             window.addEventListener('orientationchange', () => {
                 setTimeout(lockUIOrientation, 100);
             });
+            
+            // Prevent unwanted touch behaviors
+            document.addEventListener('touchmove', (e) => {
+                if (e.touches.length > 1) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
         }
 
         // Update camera orientation handling
@@ -919,6 +924,136 @@
                 // Back camera handling
                 video.style.transform = 'none';
             }
+        }
+
+        // Add iOS-specific styles with fixed control positions
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Base styles */
+            .container {
+                width: 100%;
+                height: 100%;
+                position: relative;
+            }
+
+            /* iOS specific styles */
+            .ios-device {
+                /* Lock height for iOS */
+                height: -webkit-fill-available;
+            }
+
+            .ios-device .button-container {
+                position: fixed;
+                bottom: 0;
+                left: 0;
+                right: 0;
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                padding: 20px;
+                padding-bottom: max(20px, env(safe-area-inset-bottom));
+                background: linear-gradient(to top, rgba(0,0,0,0.3), transparent);
+                z-index: 1000;
+                /* Force portrait layout */
+                transform-origin: bottom center;
+            }
+
+            .ios-device .zoom-controls {
+                position: fixed;
+                bottom: 120px; /* Position above buttons */
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 1000;
+                background: rgba(0, 0, 0, 0.5);
+                padding: 8px 12px;
+                border-radius: 20px;
+                /* Force portrait layout */
+                transform-origin: center;
+            }
+
+            /* Landscape specific fixes for iOS */
+            @media screen and (orientation: landscape) {
+                .ios-device .button-container {
+                    right: env(safe-area-inset-right);
+                    bottom: 0;
+                    padding-bottom: max(20px, env(safe-area-inset-bottom));
+                    padding-right: max(20px, env(safe-area-inset-right));
+                    /* Force portrait layout in landscape */
+                    transform: translateY(-50%) !important;
+                }
+
+                .ios-device .zoom-controls {
+                    bottom: auto !important;
+                    right: max(120px, env(safe-area-inset-right));
+                    transform: none !important;
+                    /* Adjust for notched phones */
+                    padding-right: env(safe-area-inset-right);
+                }
+
+                .ios-device #camera {
+                    width: 100vw;
+                    height: 100vh;
+                    object-fit: cover;
+                }
+            }
+
+            /* Ensure buttons are properly sized and spaced */
+            .button {
+                width: 50px;
+                height: 50px;
+                margin: 0 10px;
+                border-radius: 50%;
+                background: rgba(255, 255, 255, 0.3);
+                border: none;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+            }
+
+            #capture {
+                width: 65px;
+                height: 65px;
+                background: white;
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Add iOS detection and handling
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+            document.body.classList.add('ios-device');
+            
+            // Lock UI orientation
+            function lockUIOrientation() {
+                const container = document.querySelector('.container');
+                const controls = document.querySelector('.button-container');
+                const zoom = document.querySelector('.zoom-controls');
+
+                // Force portrait layout
+                container.style.height = '-webkit-fill-available';
+                
+                // Update control positions based on orientation
+                if (window.matchMedia("(orientation: landscape)").matches) {
+                    controls.style.right = `max(20px, env(safe-area-inset-right))`;
+                    zoom.style.right = `max(120px, env(safe-area-inset-right))`;
+                } else {
+                    controls.style.right = '0';
+                    zoom.style.right = 'auto';
+                }
+            }
+
+            // Initialize and update on orientation change
+            lockUIOrientation();
+            window.addEventListener('orientationchange', () => {
+                setTimeout(lockUIOrientation, 100);
+            });
+            
+            // Prevent unwanted touch behaviors
+            document.addEventListener('touchmove', (e) => {
+                if (e.touches.length > 1) {
+                    e.preventDefault();
+                }
+            }, { passive: false });
         }
     </script>
 </body>

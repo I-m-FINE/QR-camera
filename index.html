@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.5');</script>
+    <script>console.log('Camera App v1.3.6');</script>
     <style>
         * {
             margin: 0;
@@ -644,7 +644,7 @@
             }
         }
 
-        // Enhanced camera initialization
+        // Simplified camera initialization without unnecessary alerts
         async function startCamera(facingMode = 'environment') {
             try {
                 console.log('Starting camera initialization...');
@@ -659,14 +659,12 @@
                 // Basic constraints first
                 let stream = null;
                 try {
-                    // Try with basic video constraint first
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: true,
                         audio: false
                     });
                 } catch (e) {
                     console.log('Basic camera access failed, trying with constraints...');
-                    // If basic fails, try with specific constraints
                     stream = await navigator.mediaDevices.getUserMedia({
                         video: {
                             facingMode: facingMode,
@@ -678,7 +676,8 @@
                 }
 
                 if (!stream) {
-                    throw new Error('Failed to get camera stream');
+                    console.error('Failed to get camera stream');
+                    return;
                 }
 
                 // Assign stream to video element
@@ -687,19 +686,18 @@
                 currentFacingMode = facingMode;
 
                 // Wait for video to be ready
-                await new Promise((resolve, reject) => {
+                await new Promise((resolve) => {
                     video.onloadedmetadata = resolve;
-                    video.onerror = reject;
-                    setTimeout(reject, 3000, new Error('Video load timeout'));
+                    // Remove timeout to prevent unnecessary alerts
                 });
 
-                // Try to play
+                // Try to play without alerts
                 try {
                     await video.play();
                     console.log('Camera started successfully');
                 } catch (playError) {
                     console.error('Play failed:', playError);
-                    // Add play button for iOS
+                    // Silent fallback for iOS
                     const playButton = document.createElement('button');
                     playButton.textContent = 'Start Camera';
                     playButton.onclick = async () => {
@@ -715,24 +713,24 @@
 
             } catch (error) {
                 console.error('Camera initialization failed:', error);
-                alert('Please enable camera access and refresh the page');
+                // Log error but don't show alert
             }
         }
 
-        // Initialize on page load
+        // Initialize on page load without alerts
         document.addEventListener('DOMContentLoaded', () => {
             setTimeout(async () => {
                 try {
                     await startCamera();
                 } catch (error) {
                     console.error('Initial camera start failed:', error);
-                    // Single retry after 1 second
+                    // Silent retry after 1 second
                     setTimeout(() => startCamera(), 1000);
                 }
-            }, 100); // Small delay to ensure DOM is ready
+            }, 100);
         });
 
-        // Handle visibility changes
+        // Handle visibility changes silently
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible') {
                 startCamera(currentFacingMode);
@@ -1336,7 +1334,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.3.5');
+        console.log('Camera App v1.3.6');
     </script>
 </body>
 </html>

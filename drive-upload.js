@@ -29,26 +29,23 @@ window.initGoogleApi = async function() {
             apiKey: window.googleApiConfig.API_KEY,
             discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
         });
-        debugLog('GAPI client initialized');
-
-        // Load Drive API
-        await gapi.client.load('drive', 'v3');
-        debugLog('Drive API loaded');
 
         // Initialize token client
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: window.googleApiConfig.CLIENT_ID,
             scope: window.googleApiConfig.SCOPES,
+            prompt: 'consent',
             callback: (tokenResponse) => {
                 if (tokenResponse.error !== undefined) {
                     throw (tokenResponse);
                 }
-                debugLog('Token received successfully');
+                window.googleApi.state.accessToken = tokenResponse.access_token;
+                debugLog('Token received:', tokenResponse);
             }
         });
 
         window.googleApi.state.gapiInited = true;
-        debugLog('Google API initialization complete');
+        debugLog('Google API initialized');
         return true;
     } catch (error) {
         debugLog('ERROR: Google API initialization failed', error);
@@ -58,36 +55,19 @@ window.initGoogleApi = async function() {
 
 // Upload to Google Drive
 window.uploadToGoogleDrive = async function(blob, type) {
-    debugLog(`Starting upload for ${type}`, { blobSize: blob?.size });
+    debugLog('Starting upload process');
     
-    if (!blob) {
-        throw new Error('No data to upload');
-    }
-
     try {
+        // Check initialization
         if (!window.googleApi.state.gapiInited) {
-            await window.initGoogleApi();
+            throw new Error('Google API not initialized');
         }
 
-        // Request token
-        await new Promise((resolve, reject) => {
-            try {
-                const tokenClient = window.googleApi.state.tokenClient;
-                if (!tokenClient) {
-                    throw new Error('Token client not initialized');
-                }
-
-                tokenClient.callback = (resp) => {
-                    if (resp.error !== undefined) {
-                        reject(resp);
-                    }
-                    resolve(resp);
-                };
-                tokenClient.requestAccessToken({ prompt: 'consent' });
-            } catch (err) {
-                reject(err);
-            }
-        });
+        // Request token if needed
+        if (!window.googleApi.state.accessToken) {
+            debugLog('Requesting token');
+            await window.googleApi.state.tokenClient.requestAccessToken();
+        }
 
         // Create file metadata
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');

@@ -4,13 +4,13 @@ function debugLog(message, data = null) {
     console.log(`[${timestamp}] ${message}`, data || '');
 }
 
-// Global state
+// Global state with your folder ID
 window.googleApi = {
     state: {
         tokenClient: null,
         gapiInited: false,
         accessToken: null,
-        folderId: '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'
+        folderId: '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'  // Your specific folder ID
     }
 };
 
@@ -105,11 +105,6 @@ window.uploadToGoogleDrive = async function(blob, type) {
                 .reduce((data, byte) => data + String.fromCharCode(byte), '')
         );
 
-        debugLog('File converted to base64', { 
-            base64Length: base64Data.length,
-            sampleStart: base64Data.substring(0, 50) 
-        });
-
         // Create metadata part
         const metadata = {
             name: fileName,
@@ -161,16 +156,6 @@ window.uploadToGoogleDrive = async function(blob, type) {
 
         if (!file.result.size || parseInt(file.result.size) === 0) {
             throw new Error('Upload verification failed - file size is 0');
-        }
-
-        // Ensure file is in the correct folder
-        if (!file.result.parents?.includes(window.googleApi.state.folderId)) {
-            debugLog('Moving file to correct folder');
-            await gapi.client.drive.files.update({
-                fileId: file.result.id,
-                addParents: window.googleApi.state.folderId,
-                fields: 'id, parents'
-            });
         }
 
         showStatus('File uploaded successfully');

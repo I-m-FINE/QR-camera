@@ -45,6 +45,7 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
+            transition: transform 0.3s ease-out;
         }
 
         /* Updated button container for camera-like layout */
@@ -410,11 +411,6 @@
         // Enhanced startCamera function
         async function startCamera(facingMode = 'environment') {
             try {
-                const { hasCamera, hasMicrophone } = await utils.checkDeviceSupport();
-                if (!hasCamera) {
-                    throw new Error('No camera detected');
-                }
-
                 const video = document.getElementById('camera');
                 
                 // Cleanup existing stream
@@ -422,30 +418,7 @@
                     utils.cleanupMediaStream(video.srcObject);
                 }
 
-                // Always mute preview
-                video.muted = true;
-                
-                // Configure audio constraints
-                const audioConstraints = hasMicrophone ? {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: 44100,
-                    sampleSize: 16
-                } : false;
-
-                // Get audio stream if available
-                let audioStream;
-                if (hasMicrophone) {
-                    try {
-                        audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-                    } catch (audioErr) {
-                        utils.handleError(audioErr, 'Unable to access microphone');
-                    }
-                }
-
-                // Get video stream
-                const videoStream = await navigator.mediaDevices.getUserMedia({
+                const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1920 },
@@ -453,36 +426,68 @@
                     }
                 });
 
-                // Combine streams
-                const tracks = [...videoStream.getTracks()];
-                if (audioStream) {
-                    tracks.push(...audioStream.getTracks());
-                }
-                
-                const combinedStream = new MediaStream(tracks);
-                video.srcObject = combinedStream;
-                currentStream = combinedStream;
+                video.srcObject = stream;
+                currentStream = stream;
                 currentFacingMode = facingMode;
 
-                // Log active tracks
-                console.log('[Stream Info]', {
-                    videoTracks: combinedStream.getVideoTracks().length,
-                    audioTracks: combinedStream.getAudioTracks().length
-                });
+                // Enhanced orientation handling
+                function updateOrientation() {
+                    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                    const isAndroid = /Android/.test(navigator.userAgent);
 
-                // Re-enter fullscreen if needed after camera switch
-                if (document.body.classList.contains('fullscreen-mode') && !fullscreenUtils.isFullscreen()) {
-                    await fullscreenUtils.enterFullscreen();
+                    // Reset transform
+                    video.style.transform = '';
+
+                    if (facingMode === 'user') {
+                        if (isLandscape) {
+                            if (isAndroid) {
+                                // Android front camera landscape fix
+                                video.style.transform = window.orientation === 90 
+                                    ? 'scale(-1, 1) rotate(180deg)'
+                                    : 'scale(-1, 1) rotate(180deg)';
+                            } else if (isIOS) {
+                                // iOS front camera landscape fix
+                                video.style.transform = 'scale(-1, 1) rotate(180deg)';
+                            } else {
+                                // Default landscape front camera
+                                video.style.transform = 'scale(-1, 1)';
+                            }
+                        } else {
+                            // Portrait mode front camera
+                            video.style.transform = 'scale(-1, 1)';
+                        }
+                    } else {
+                        // Back camera
+                        if (isLandscape) {
+                            video.style.transform = 'rotate(0deg)';
+                        } else {
+                            video.style.transform = 'rotate(0deg)';
+                        }
+                    }
+
+                    // Log current orientation state for debugging
+                    console.log('Camera Orientation:', {
+                        facingMode,
+                        isLandscape,
+                        isIOS,
+                        isAndroid,
+                        orientation: window.orientation,
+                        transform: video.style.transform
+                    });
                 }
 
-                // Initialize zoom controls after camera starts
-                initializeZoomControls();
+                // Update orientation immediately and on changes
+                updateOrientation();
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(updateOrientation, 100);
+                });
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play()
                             .then(() => {
-                                initializeZoomControls(); // Initialize zoom after video plays
+                                initializeZoomControls();
                                 resolve();
                             })
                             .catch(error => {
@@ -491,6 +496,7 @@
                             });
                     };
                 });
+
             } catch (err) {
                 utils.handleError(err, 'Error accessing media devices');
                 throw err;

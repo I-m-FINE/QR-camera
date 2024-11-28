@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.5.3');</script>
+    <script>console.log('Camera App v1.5.4');</script>
     <style>
         * {
             margin: 0;
@@ -1209,23 +1209,27 @@
                 line-height: 1.4;
             `;
 
-            // Set auth URL with correct redirect URI
-            const redirectUri = 'https://i-m-fine.github.io/QR-camera/'; // Update this to match your authorized redirect URI
+            // Set auth URL with exact matching redirect URI
+            const redirectUri = 'https://i-m-fine.github.io'; // Changed to match root domain
             const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' + 
                 '?client_id=997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com' +
                 '&redirect_uri=' + encodeURIComponent(redirectUri) +
                 '&response_type=token' +
                 '&scope=https://www.googleapis.com/auth/drive.file' +
                 '&prompt=consent' +
-                '&include_granted_scopes=true' +
-                '&state=' + Math.random().toString(36).substring(7);
+                '&access_type=offline' +
+                '&include_granted_scopes=true';
 
-            // Create sign in link
+            // Create sign in link with debugging
             const signInLink = document.createElement('a');
             signInLink.className = 'ios-sign-in-btn';
             signInLink.id = 'iosSignInButton';
             signInLink.textContent = 'Sign in with Google';
             signInLink.href = authUrl;
+
+            // Add debug logging
+            console.log('Auth URL:', authUrl);
+            console.log('Redirect URI:', redirectUri);
 
             // Style link as button
             signInLink.style.cssText = `
@@ -1246,13 +1250,13 @@
             // Add click handler with error logging
             signInLink.onclick = function(e) {
                 e.preventDefault();
-                console.log('Attempting Google auth redirect...');
+                console.log('Starting auth redirect...');
                 try {
                     window.location.href = authUrl;
                     console.log('Redirect initiated');
                 } catch (error) {
                     console.error('Redirect failed:', error);
-                    alert('Failed to open Google Sign-in. Please try again.');
+                    showStatus('Sign-in failed. Please try again.');
                 }
             };
 
@@ -1264,6 +1268,25 @@
             document.body.appendChild(container);
         }
 
+        // Handle auth callback
+        window.addEventListener('load', function() {
+            console.log('Checking for auth callback...');
+            console.log('Current URL:', window.location.href);
+            
+            if (window.location.hash) {
+                console.log('Found hash:', window.location.hash);
+                const params = new URLSearchParams(window.location.hash.substring(1));
+                const token = params.get('access_token');
+                if (token) {
+                    console.log('Got token, storing...');
+                    localStorage.setItem('googleToken', token);
+                    const loginUI = document.querySelector('.ios-login-container');
+                    if (loginUI) loginUI.remove();
+                    showStatus('Successfully signed in!', 2000);
+                }
+            }
+        });
+
         // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
             if (isIOS && !localStorage.getItem('googleToken')) {
@@ -1273,7 +1296,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.5.3');
+        console.log('Camera App v1.5.4');
     </script>
 </body>
 </html>

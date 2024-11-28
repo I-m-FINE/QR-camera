@@ -334,36 +334,94 @@
                 }
             });
 
-            // Upload button listener
+            // Upload button listener with detailed debugging
             document.getElementById('uploadPhoto')?.addEventListener('click', async () => {
+                debugLog('Upload button clicked');
+                
                 try {
-                    debugLog('Starting upload process');
+                    // Check if window.uploadToGoogleDrive exists
+                    if (!window.uploadToGoogleDrive) {
+                        debugLog('ERROR: uploadToGoogleDrive function not found');
+                        throw new Error('Upload function not available');
+                    }
+
+                    // Check if we have a photo to upload
+                    debugLog('Checking captured media:', window.capturedMedia);
                     if (!window.capturedMedia?.currentPhoto) {
+                        debugLog('ERROR: No photo found to upload');
                         throw new Error('No photo to upload');
                     }
 
+                    // Log photo details
+                    const photo = window.capturedMedia.currentPhoto;
+                    debugLog('Photo details:', {
+                        size: photo.size,
+                        type: photo.type,
+                        lastModified: photo.lastModified
+                    });
+
+                    // Start upload process
+                    debugLog('Starting upload to Google Drive...');
                     showStatus('Uploading photo...');
-                    const result = await window.uploadToGoogleDrive(
-                        window.capturedMedia.currentPhoto,
-                        'image'
-                    );
+
+                    // Attempt upload
+                    const result = await window.uploadToGoogleDrive(photo, 'image');
+                    debugLog('Upload response:', result);
+
+                    if (!result) {
+                        throw new Error('No response from upload');
+                    }
+
+                    // Success handling
+                    debugLog('Upload successful:', {
+                        fileId: result.id,
+                        viewLink: result.webViewLink
+                    });
                     
-                    debugLog('Upload result:', result);
                     showStatus('Photo uploaded successfully');
 
-                    // Hide upload button after successful upload
+                    // Cleanup
                     const uploadButton = document.getElementById('uploadPhoto');
                     if (uploadButton) {
+                        debugLog('Hiding upload button');
                         uploadButton.style.display = 'none';
                     }
 
-                    // Clear the captured photo
                     window.capturedMedia.currentPhoto = null;
+                    debugLog('Cleaned up after successful upload');
 
                 } catch (error) {
-                    debugLog('Upload error:', error);
+                    debugLog('Upload error:', {
+                        message: error.message,
+                        stack: error.stack,
+                        error: error
+                    });
                     showStatus('Upload failed: ' + error.message);
                 }
+            });
+
+            // Add debug logging to showStatus
+            function showStatus(message) {
+                debugLog('Status update:', message);
+                const statusElement = document.getElementById('statusMessage');
+                if (statusElement) {
+                    statusElement.textContent = message;
+                    statusElement.classList.add('status-visible');
+                    setTimeout(() => {
+                        statusElement.classList.remove('status-visible');
+                    }, 3000);
+                }
+            }
+
+            // Add debug logging for initialization
+            document.addEventListener('DOMContentLoaded', function() {
+                debugLog('Document ready, checking components:', {
+                    uploadToGoogleDrive: !!window.uploadToGoogleDrive,
+                    capturedMedia: !!window.capturedMedia,
+                    googleApi: !!window.googleApi
+                });
+
+                // ... (rest of the initialization code)
             });
         });
 

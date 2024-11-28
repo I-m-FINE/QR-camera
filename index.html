@@ -637,65 +637,8 @@
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
-<<<<<<< HEAD
                 // Wait for video to be ready
                 await new Promise((resolve) => {
-=======
-                // Enhanced orientation handling
-                function updateOrientation() {
-                    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                    const isAndroid = /Android/.test(navigator.userAgent);
-
-                    // Reset transform
-                    video.style.transform = '';
-
-                    if (facingMode === 'user') {
-                        if (isLandscape) {
-                            if (isAndroid) {
-                                // Android front camera landscape fix
-                                video.style.transform = window.orientation === 90 
-                                    ? 'scale(-1, 1) rotate(180deg)'
-                                    : 'scale(-1, 1) rotate(180deg)';
-                            } else if (isIOS) {
-                                // iOS front camera landscape fix
-                                video.style.transform = 'scale(-1, 1) rotate(180deg)';
-                            } else {
-                                // Default landscape front camera
-                                video.style.transform = 'scale(-1, 1)';
-                            }
-                        } else {
-                            // Portrait mode front camera
-                            video.style.transform = 'scale(-1, 1)';
-                        }
-                    } else {
-                        // Back camera
-                        if (isLandscape) {
-                            video.style.transform = 'rotate(0deg)';
-                        } else {
-                            video.style.transform = 'rotate(0deg)';
-                        }
-                    }
-
-                    // Log current orientation state for debugging
-                    console.log('Camera Orientation:', {
-                        facingMode,
-                        isLandscape,
-                        isIOS,
-                        isAndroid,
-                        orientation: window.orientation,
-                        transform: video.style.transform
-                    });
-                }
-
-                // Update orientation immediately and on changes
-                updateOrientation();
-                window.addEventListener('orientationchange', () => {
-                    setTimeout(updateOrientation, 100);
-                });
-
-                return new Promise((resolve) => {
->>>>>>> parent of 230417f (not flying anymore i guess)
                     video.onloadedmetadata = () => {
                         resolve();
                     };

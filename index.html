@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.5.1');</script>
+    <script>console.log('Camera App v1.5.2');</script>
     <style>
         * {
             margin: 0;
@@ -1155,26 +1155,26 @@
             const existingLogin = document.querySelector('.ios-login-container');
             if (existingLogin) existingLogin.remove();
 
-            // Create elements separately for better control
+            // Create elements
             const container = document.createElement('div');
             const loginBox = document.createElement('div');
             const title = document.createElement('div');
             const text = document.createElement('div');
-            const signInButton = document.createElement('button');
+            const signInLink = document.createElement('a'); // Changed to anchor tag
 
             // Set classes and content
             container.className = 'ios-login-container';
             loginBox.className = 'ios-login-box';
             title.className = 'ios-login-title';
             text.className = 'ios-login-text';
-            signInButton.className = 'ios-sign-in-btn';
-            signInButton.id = 'iosSignInButton';
+            signInLink.className = 'ios-sign-in-btn';
+            signInLink.id = 'iosSignInButton';
 
             title.textContent = 'Sign in Required';
             text.textContent = 'To enable automatic upload of photos and videos, please sign in with your Google account.';
-            signInButton.textContent = 'Sign in with Google';
+            signInLink.textContent = 'Sign in with Google';
 
-            // Style elements (keeping same styles as before)
+            // Style container
             container.style.cssText = `
                 position: fixed;
                 top: 0;
@@ -1188,6 +1188,7 @@
                 justify-content: center;
             `;
 
+            // Style login box
             loginBox.style.cssText = `
                 background: white;
                 padding: 20px;
@@ -1197,6 +1198,7 @@
                 text-align: center;
             `;
 
+            // Style title and text
             title.style.cssText = `
                 color: #333;
                 font-size: 18px;
@@ -1211,93 +1213,68 @@
                 line-height: 1.4;
             `;
 
-            signInButton.style.cssText = `
+            // Style link as button
+            signInLink.style.cssText = `
+                display: block;
                 background: #4285f4;
                 color: white;
                 font-size: 16px;
                 padding: 12px 24px;
                 border-radius: 24px;
-                border: none;
-                width: 100%;
+                text-decoration: none;
+                width: 80%;
+                margin: 0 auto;
                 font-weight: bold;
-                cursor: pointer;
-                -webkit-appearance: none;
-                appearance: none;
+                -webkit-tap-highlight-color: transparent;
             `;
 
-            // Build DOM
-            loginBox.appendChild(title);
-            loginBox.appendChild(text);
-            loginBox.appendChild(signInButton);
-            container.appendChild(loginBox);
-            document.body.appendChild(container);
-
-            // Define auth URL
+            // Set direct auth URL
             const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' + 
                 '?client_id=997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com' +
                 '&redirect_uri=' + encodeURIComponent(window.location.origin) +
                 '&response_type=token' +
                 '&scope=https://www.googleapis.com/auth/drive.file' +
-                '&prompt=select_account consent' +
-                '&access_type=offline';
+                '&prompt=select_account consent';
 
-            // Add click handler for iOS
-            signInButton.addEventListener('click', function(e) {
-                e.preventDefault();
-                console.log('Button clicked, redirecting to:', authUrl);
-                window.location.assign(authUrl);
-            });
+            // Set href directly
+            signInLink.href = authUrl;
 
-            // Add touch handlers for iOS
-            signInButton.addEventListener('touchend', function(e) {
+            // Build DOM
+            loginBox.appendChild(title);
+            loginBox.appendChild(text);
+            loginBox.appendChild(signInLink);
+            container.appendChild(loginBox);
+            document.body.appendChild(container);
+
+            // Add click handler
+            signInLink.onclick = function(e) {
                 e.preventDefault();
-                console.log('Button touched, redirecting to:', authUrl);
-                window.location.assign(authUrl);
-            });
+                console.log('Redirecting to Google auth...');
+                // Try different redirect methods
+                try {
+                    window.open(authUrl, '_self');
+                } catch (error) {
+                    console.error('Window.open failed, trying location.href');
+                    try {
+                        window.location.href = authUrl;
+                    } catch (error2) {
+                        console.error('Location.href failed, trying location.replace');
+                        window.location.replace(authUrl);
+                    }
+                }
+            };
         }
 
-        // Handle auth callback
-        window.addEventListener('load', function() {
-            // Check for auth response in URL
-            if (window.location.hash) {
-                console.log('Found hash in URL:', window.location.hash);
-                const params = new URLSearchParams(window.location.hash.substring(1));
-                const token = params.get('access_token');
-                if (token) {
-                    console.log('Got token, storing...');
-                    localStorage.setItem('googleToken', token);
-                    const loginUI = document.querySelector('.ios-login-container');
-                    if (loginUI) loginUI.remove();
-                    showStatus('Successfully signed in!', 2000);
-                }
-            }
-        });
-
-        // Check auth status on page load
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
             if (isIOS && !localStorage.getItem('googleToken')) {
-                console.log('iOS detected, no token found, showing login UI');
+                console.log('Showing iOS login UI');
                 setTimeout(createIOSLoginUI, 1000);
             }
         });
 
-        // Add debug logging
-        function showStatus(message, duration = 0) {
-            console.log('Status:', message);
-            const statusElement = document.getElementById('statusMessage');
-            if (statusElement) {
-                statusElement.textContent = message;
-                statusElement.style.display = 'block';
-                if (duration > 0) {
-                    setTimeout(() => {
-                        statusElement.style.display = 'none';
-                    }, duration);
-                }
-            }
-        }
-
         // Update version
-        console.log('Camera App v1.5.1');
+        console.log('Camera App v1.5.2');
     </script>
 </body>
 </html>

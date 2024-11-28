@@ -98,58 +98,53 @@ window.uploadToGoogleDrive = async function(blob, type) {
         
         debugLog('Preparing file upload:', { fileName, mimeType, folderId: window.googleApi.state.folderId });
 
-        // Convert blob to array buffer
+        // First, create the file metadata
+        const fileMetadata = {
+            name: fileName,
+            mimeType: mimeType,
+            parents: [window.googleApi.state.folderId]
+        };
+
+        debugLog('Creating file with metadata:', fileMetadata);
+
+        // Create the file first
+        const fileResponse = await gapi.client.drive.files.create({
+            resource: fileMetadata,
+            fields: 'id'
+        });
+
+        const fileId = fileResponse.result.id;
+        debugLog('File created with ID:', fileId);
+
+        // Now upload the media content
         const arrayBuffer = await blob.arrayBuffer();
         const base64Data = btoa(
             new Uint8Array(arrayBuffer)
                 .reduce((data, byte) => data + String.fromCharCode(byte), '')
         );
 
-        // Create metadata part
-        const metadata = {
-            name: fileName,
-            mimeType: mimeType,
-            parents: [window.googleApi.state.folderId]
-        };
+        debugLog('Uploading media content');
 
-        // Create multipart request body
-        const boundary = '-------314159265358979323846';
-        const delimiter = "\r\n--" + boundary + "\r\n";
-        const close_delim = "\r\n--" + boundary + "--";
-
-        const multipartRequestBody =
-            delimiter +
-            'Content-Type: application/json\r\n\r\n' +
-            JSON.stringify(metadata) +
-            delimiter +
-            'Content-Type: ' + mimeType + '\r\n' +
-            'Content-Transfer-Encoding: base64\r\n' +
-            '\r\n' +
-            base64Data +
-            close_delim;
-
-        debugLog('Sending upload request');
-
-        // Make the upload request
-        const response = await gapi.client.request({
-            path: '/upload/drive/v3/files',
-            method: 'POST',
+        // Upload the media content
+        const uploadResponse = await gapi.client.request({
+            path: `/upload/drive/v3/files/${fileId}`,
+            method: 'PATCH',
             params: {
-                uploadType: 'multipart'
+                uploadType: 'media'
             },
             headers: {
-                'Content-Type': `multipart/related; boundary=${boundary}`,
+                'Content-Type': mimeType,
                 'Authorization': 'Bearer ' + window.googleApi.state.accessToken
             },
-            body: multipartRequestBody
+            body: base64Data
         });
 
-        debugLog('Initial upload response:', response);
+        debugLog('Upload response:', uploadResponse);
 
         // Verify the upload
         const file = await gapi.client.drive.files.get({
-            fileId: response.result.id,
-            fields: '*'
+            fileId: fileId,
+            fields: 'id, name, mimeType, size, webViewLink, parents'
         });
 
         debugLog('File verification:', file.result);
@@ -158,7 +153,11 @@ window.uploadToGoogleDrive = async function(blob, type) {
             throw new Error('Upload verification failed - file size is 0');
         }
 
-        showStatus('File uploaded successfully');
+        if (!file.result.parents.includes(window.googleApi.state.folderId)) {
+            throw new Error('File not in specified folder');
+        }
+
+        showStatus('File uploaded successfully to folder');
         debugLog('Upload successful:', file.result);
 
         // Open the file in a new tab

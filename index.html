@@ -1173,17 +1173,18 @@
         buttonStyles.textContent = `
             .button-container {
                 position: fixed;
+                bottom: max(30px, env(safe-area-inset-bottom));
+                left: 0;
+                right: 0;
                 z-index: 1000;
                 display: flex;
-                gap: 20px;
+                justify-content: center; /* Center the buttons */
                 align-items: center;
+                gap: 20px;
+                padding: 0 20px;
             }
 
             /* Button order and layout */
-            .button-container > * {
-                order: 5; /* Default order */
-            }
-
             #switchCamera {
                 order: 1;
             }
@@ -1205,23 +1206,41 @@
                 order: 5;
             }
 
-            /* Maintain spacing */
-            .button-container > *:not(:last-child) {
-                margin-right: 20px;
-            }
-
-            /* iOS specific adjustments */
+            /* iOS landscape mode */
             @supports (-webkit-touch-callout: none) {
                 @media screen and (orientation: landscape) {
                     .ios-device .button-container {
                         flex-direction: column;
+                        right: max(30px, env(safe-area-inset-right));
+                        bottom: 50%;
+                        transform: translateY(50%);
+                        left: auto;
+                        width: auto;
+                        padding: 20px;
                     }
                     
-                    .ios-device .button-container > *:not(:last-child) {
-                        margin-right: 0;
-                        margin-bottom: 20px;
+                    .ios-device .button-container > * {
+                        margin: 10px 0;
                     }
                 }
+
+                /* iOS portrait mode */
+                @media screen and (orientation: portrait) {
+                    .ios-device .button-container {
+                        bottom: max(30px, env(safe-area-inset-bottom));
+                        left: 0;
+                        right: 0;
+                        flex-direction: row;
+                        justify-content: center;
+                        padding: 0 20px;
+                    }
+                }
+            }
+
+            /* Non-iOS devices */
+            :not(.ios-device) .button-container {
+                flex-direction: row;
+                justify-content: center;
             }
         `;
 
@@ -1234,7 +1253,7 @@
         document.head.appendChild(buttonStyles);
 
         // Update version
-        console.log('Camera App v1.2.7');
+        console.log('Camera App v1.2.8');
     </script>
 </body>
 </html>

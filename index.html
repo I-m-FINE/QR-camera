@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.3');</script>
+    <script>console.log('Camera App v1.3.4');</script>
     <style>
         * {
             margin: 0;
@@ -344,7 +344,7 @@
         <canvas id="canvas" style="display:none;"></canvas>
     </div>
 
-    <script src="drive-upload.js"></scrip>
+    <script src="drive-upload.js"></script>
     <script>
         let imageBlob = null;
         let videoBlob = null;
@@ -1214,8 +1214,150 @@
         buttonStyles.setAttribute('data-purpose', 'button-styles');
         document.head.appendChild(buttonStyles);
 
-        
-        console.log('Camera App v1.3.3');
+        // First, ensure we have the video element in HTML
+        const videoHTML = `
+        <div class="camera-container">
+            <video id="camera" playsinline autoplay muted></video>
+        </div>
+        `;
+
+        // Make sure video element exists
+        if (!document.querySelector('.camera-container')) {
+            document.body.insertAdjacentHTML('afterbegin', videoHTML);
+        }
+
+        // Add necessary video styles
+        const videoStyles = document.createElement('style');
+        videoStyles.textContent = `
+            #camera {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+
+            .camera-container {
+                width: 100vw;
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                background: #000;
+                overflow: hidden;
+            }
+        `;
+        document.head.appendChild(videoStyles);
+
+        // Enhanced camera access function
+        async function initializeCamera() {
+            try {
+                console.log('Initializing camera...');
+                
+                // Check for API support
+                if (!navigator.mediaDevices?.getUserMedia) {
+                    throw new Error('Camera API not supported');
+                }
+
+                // List available devices first
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const cameras = devices.filter(device => device.kind === 'videoinput');
+                console.log('Available cameras:', cameras);
+
+                if (cameras.length === 0) {
+                    throw new Error('No cameras found');
+                }
+
+                // Request permissions explicitly
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                });
+
+                const video = document.getElementById('camera');
+                if (!video) {
+                    throw new Error('Video element not found');
+                }
+
+                // Clean up any existing streams
+                if (video.srcObject) {
+                    const tracks = video.srcObject.getTracks();
+                    tracks.forEach(track => track.stop());
+                }
+
+                // Set up new stream
+                video.srcObject = stream;
+                currentStream = stream;
+
+                // Wait for video to be ready
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        console.log('Video metadata loaded');
+                        resolve();
+                    };
+                    video.onerror = (e) => {
+                        console.error('Video error:', e);
+                        reject(new Error('Video loading failed'));
+                    };
+                    // Set timeout
+                    setTimeout(() => reject(new Error('Video loading timeout')), 5000);
+                });
+
+                // Ensure video plays
+                await video.play();
+                console.log('Camera successfully initialized');
+
+                return stream;
+
+            } catch (error) {
+                console.error('Camera initialization failed:', error);
+                alert(`Camera access failed: ${error.message}\nPlease check your camera permissions and refresh the page.`);
+                throw error;
+            }
+        }
+
+        // Initialize everything when the page loads
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Request camera access immediately
+                await initializeCamera();
+            } catch (error) {
+                console.error('Failed to initialize camera:', error);
+                // Retry once after a delay
+                setTimeout(async () => {
+                    try {
+                        await initializeCamera();
+                    } catch (retryError) {
+                        console.error('Camera retry failed:', retryError);
+                    }
+                }, 2000);
+            }
+        });
+
+        // Handle page visibility changes
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                try {
+                    await initializeCamera();
+                } catch (error) {
+                    console.error('Failed to reinitialize camera:', error);
+                }
+            } else {
+                // Stop camera when page is hidden
+                const video = document.getElementById('camera');
+                if (video?.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                }
+            }
+        });
+
+        // Update version
+        console.log('Camera App v1.3.4');
     </script>
 </body>
 </html>

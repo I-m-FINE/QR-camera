@@ -8,13 +8,25 @@ let accessToken = null;
 // Initialize Google Sign-in when page loads
 document.addEventListener('DOMContentLoaded', async () => {
     try {
+        console.log('[' + new Date().toISOString() + '] Drive upload script loaded successfully');
+        await initializeGoogleAuth();
+    } catch (error) {
+        console.error('Error in DOMContentLoaded:', error);
+    }
+});
+
+async function initializeGoogleAuth() {
+    try {
+        console.log('[' + new Date().toISOString() + '] Initializing Google API');
+        
         // Load Google Identity Services
-        await new Promise((resolve) => {
+        await new Promise((resolve, reject) => {
             const script = document.createElement('script');
             script.src = 'https://accounts.google.com/gsi/client';
             script.async = true;
             script.defer = true;
             script.onload = resolve;
+            script.onerror = reject;
             document.body.appendChild(script);
         });
 
@@ -30,7 +42,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             callback: (tokenResponse) => {
                 if (tokenResponse && tokenResponse.access_token) {
                     accessToken = tokenResponse.access_token;
-                    console.log('Successfully authenticated with Google Drive');
+                    console.log('[' + new Date().toISOString() + '] Successfully authenticated with Google Drive');
                 }
             },
         });
@@ -38,9 +50,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Request token immediately
         client.requestAccessToken();
     } catch (error) {
-        console.error('Error initializing Google API:', error);
+        console.error('[' + new Date().toISOString() + '] Error initializing Google API:', error);
+        throw error;
     }
-});
+}
 
 async function uploadToDrive(blob, type = 'image') {
     try {
@@ -83,6 +96,6 @@ async function performUpload(blob, type, token) {
     }
 
     const result = await response.json();
-    alert(`${type.charAt(0).toUpperCase() + type.slice(1)} uploaded successfully!`);
+    console.log('[' + new Date().toISOString() + '] Upload successful:', result);
     return result;
 }

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.8');</script>
+    <script>console.log('Camera App v1.3.9');</script>
     <style>
         * {
             margin: 0;
@@ -1175,8 +1175,115 @@
             }
         });
 
+        // Add auto-upload handling to capture and record functions
+        async function handleCapture() {
+            try {
+                // Existing capture code...
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
+                
+                // Show preview
+                preview.src = URL.createObjectURL(blob);
+                preview.style.display = 'block';
+                
+                // Auto upload
+                console.log('Auto uploading image...');
+                showStatus('Uploading image...');
+                await uploadToDrive(blob, 'image');
+                showStatus('Upload complete!', 3000);
+                
+                // Reset preview after successful upload
+                setTimeout(() => {
+                    preview.style.display = 'none';
+                    preview.src = '';
+                }, 2000);
+
+            } catch (error) {
+                console.error('Capture/Upload error:', error);
+                showStatus('Upload failed. Retrying...', 2000);
+                // Retry once
+                setTimeout(async () => {
+                    try {
+                        await uploadToDrive(blob, 'image');
+                        showStatus('Upload complete!', 2000);
+                    } catch (retryError) {
+                        showStatus('Upload failed', 2000);
+                    }
+                }, 3000);
+            }
+        }
+
+        // Handle video recording and auto-upload
+        async function handleRecording() {
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                // Start recording...
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(currentStream, {
+                    mimeType: 'video/webm;codecs=vp8,opus'
+                });
+                
+                mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+                
+                mediaRecorder.onstop = async () => {
+                    try {
+                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        
+                        // Show preview
+                        videoPreview.src = URL.createObjectURL(blob);
+                        videoPreview.style.display = 'block';
+                        
+                        // Auto upload
+                        console.log('Auto uploading video...');
+                        showStatus('Uploading video...');
+                        await uploadToDrive(blob, 'video');
+                        showStatus('Upload complete!', 3000);
+                        
+                        // Reset preview after successful upload
+                        setTimeout(() => {
+                            videoPreview.style.display = 'none';
+                            videoPreview.src = '';
+                        }, 2000);
+                        
+                    } catch (error) {
+                        console.error('Video Upload error:', error);
+                        showStatus('Upload failed. Retrying...', 2000);
+                        // Retry once
+                        setTimeout(async () => {
+                            try {
+                                await uploadToDrive(blob, 'video');
+                                showStatus('Upload complete!', 2000);
+                            } catch (retryError) {
+                                showStatus('Upload failed', 2000);
+                            }
+                        }, 3000);
+                    }
+                };
+                
+                mediaRecorder.start();
+                recordButton.classList.add('recording');
+                showStatus('Recording started');
+            } else {
+                mediaRecorder.stop();
+                recordButton.classList.remove('recording');
+                showStatus('Recording stopped');
+            }
+        }
+
+        // Status message helper
+        function showStatus(message, duration = 0) {
+            const statusElement = document.getElementById('statusMessage');
+            statusElement.textContent = message;
+            statusElement.style.display = 'block';
+            
+            if (duration > 0) {
+                setTimeout(() => {
+                    statusElement.style.display = 'none';
+                    statusElement.textContent = '';
+                }, duration);
+            }
+        }
+
         // Update version
-        console.log('Camera App v1.3.8');
+        console.log('Camera App v1.3.9');
     </script>
 </body>
 </html>

@@ -1205,13 +1205,13 @@
         `;
 
         // Remove existing styles and add new ones
-        const existingStyles = document.querySelectorAll('style[data-purpose="button-styles"]');
-        existingStyles.forEach(style => style.remove());
+        const oldStyles = document.querySelectorAll('style[data-purpose="button-styles"]');
+        oldStyles.forEach(style => style.remove());
         buttonStyles.setAttribute('data-purpose', 'button-styles');
         document.head.appendChild(buttonStyles);
 
-        // Update version
-        console.log('Camera App v1.2.9');
+        // Add version logging at the start of script execution
+        console.log('Camera App v1.3.0');
     </script>
 </body>
 </html>

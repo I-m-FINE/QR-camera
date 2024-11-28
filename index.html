@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.2');</script>
+    <script>console.log('Camera App v1.3.3');</script>
     <style>
         * {
             margin: 0;
@@ -625,26 +625,57 @@
             }
         }
 
-        // Enhanced camera initialization with better error handling
+        // Add explicit permission check before starting camera
+        async function checkCameraPermission() {
+            try {
+                // First check if the API is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported in this browser');
+                }
+
+                // Explicitly request camera permission
+                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                stream.getTracks().forEach(track => track.stop()); // Stop test stream
+                return true;
+            } catch (err) {
+                console.error('Camera permission error:', err);
+                alert('Please enable camera access in your browser settings and refresh the page.');
+                return false;
+            }
+        }
+
+        // Enhanced camera initialization
         async function startCamera(facingMode = 'environment') {
             try {
-                console.log('Starting camera with facing mode:', facingMode);
+                console.log('Attempting to start camera...');
                 const video = document.getElementById('camera');
                 
                 if (!video) {
                     throw new Error('Video element not found');
                 }
 
+                // Check permission first
+                const hasPermission = await checkCameraPermission();
+                if (!hasPermission) {
+                    throw new Error('Camera permission not granted');
+                }
+
                 // Stop any existing streams
                 if (currentStream) {
-                    console.log('Stopping existing stream');
                     currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                // Clear any existing srcObject
+                if (video.srcObject) {
+                    video.srcObject = null;
                 }
 
                 // Request camera with specific constraints
                 const constraints = {
                     video: {
-                        facingMode: facingMode
+                        facingMode: facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
                     },
                     audio: false
                 };
@@ -652,40 +683,61 @@
                 console.log('Requesting camera with constraints:', constraints);
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                console.log('Got new stream:', stream);
+                // Double check stream is valid
+                if (!stream || !stream.active) {
+                    throw new Error('Failed to get active camera stream');
+                }
+
                 video.srcObject = stream;
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
+                // Force video element to update
+                video.style.display = 'block';
+                
                 // Wait for video to be ready
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        console.log('Video metadata loaded');
-                        resolve();
-                    };
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = resolve;
+                    video.onerror = reject;
+                    // Add timeout
+                    setTimeout(reject, 5000, new Error('Video load timeout'));
                 });
 
-                await video.play();
-                console.log('Video playback started');
+                // Ensure autoplay works
+                try {
+                    await video.play();
+                    console.log('Camera successfully started');
+                } catch (playError) {
+                    console.error('Error auto-playing video:', playError);
+                    // Try playing again with user interaction
+                    video.onclick = async () => {
+                        try {
+                            await video.play();
+                            video.onclick = null;
+                        } catch (e) {
+                            console.error('Play on click failed:', e);
+                        }
+                    };
+                }
 
             } catch (err) {
                 console.error('Camera initialization error:', err);
-                // Retry camera access after a short delay
+                alert('Camera failed to start: ' + err.message + '\nPlease check camera permissions and refresh the page.');
+                
+                // Attempt recovery
                 setTimeout(async () => {
                     try {
-                        console.log('Retrying camera access...');
                         await startCamera(facingMode);
                     } catch (retryError) {
                         console.error('Camera retry failed:', retryError);
-                        alert('Camera access failed. Please check permissions and refresh the page.');
                     }
-                }, 1000);
+                }, 2000);
             }
         }
 
-        // Initialize camera on page load
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', async () => {
-            console.log('DOM loaded, initializing camera...');
+            console.log('Initializing camera app...');
             try {
                 await startCamera();
             } catch (error) {
@@ -1163,7 +1215,7 @@
         document.head.appendChild(buttonStyles);
 
         
-        console.log('Camera App v1.3.2');
+        console.log('Camera App v1.3.3');
     </script>
 </body>
 </html>

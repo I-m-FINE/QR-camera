@@ -247,37 +247,70 @@
         let currentZoom = 1;
         let currentStream = null;
 
+        // Add error handling and cleanup utilities
+        const utils = {
+            cleanupMediaStream: (stream) => {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                }
+            },
+            
+            handleError: (error, message) => {
+                console.error(`[${new Date().toISOString()}] ${message}:`, error);
+                showStatus(message, 5000);
+            },
+            
+            checkDeviceSupport: async () => {
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Media devices not supported');
+                }
+                
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const hasCamera = devices.some(device => device.kind === 'videoinput');
+                const hasMicrophone = devices.some(device => device.kind === 'audioinput');
+                
+                return { hasCamera, hasMicrophone };
+            }
+        };
+
+        // Enhanced startCamera function
         async function startCamera(facingMode = 'environment') {
             try {
-                const video = document.getElementById('camera');
-                
-                // Stop any existing stream
-                if (video.srcObject) {
-                    video.srcObject.getTracks().forEach(track => track.stop());
+                const { hasCamera, hasMicrophone } = await utils.checkDeviceSupport();
+                if (!hasCamera) {
+                    throw new Error('No camera detected');
                 }
 
-                // Always mute the preview video
+                const video = document.getElementById('camera');
+                
+                // Cleanup existing stream
+                if (video.srcObject) {
+                    utils.cleanupMediaStream(video.srcObject);
+                }
+
+                // Always mute preview
                 video.muted = true;
                 
                 // Configure audio constraints
-                const audioConstraints = {
+                const audioConstraints = hasMicrophone ? {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    autoGainControl: true
-                };
+                    autoGainControl: true,
+                    sampleRate: 44100,
+                    sampleSize: 16
+                } : false;
 
-                // First request audio
+                // Get audio stream if available
                 let audioStream;
-                try {
-                    audioStream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: audioConstraints
-                    });
-                } catch (audioErr) {
-                    console.error('Audio access error:', audioErr);
-                    showStatus('Unable to access microphone. Audio will not be recorded.', 5000);
+                if (hasMicrophone) {
+                    try {
+                        audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
+                    } catch (audioErr) {
+                        utils.handleError(audioErr, 'Unable to access microphone');
+                    }
                 }
 
-                // Then get video stream
+                // Get video stream
                 const videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facingMode,
@@ -286,7 +319,7 @@
                     }
                 });
 
-                // Combine streams but ensure preview remains muted
+                // Combine streams
                 const tracks = [...videoStream.getTracks()];
                 if (audioStream) {
                     tracks.push(...audioStream.getTracks());
@@ -297,81 +330,104 @@
                 currentStream = combinedStream;
                 currentFacingMode = facingMode;
 
-                // Ensure preview stays muted
-                video.volume = 0;
-                video.defaultMuted = true;
+                // Log active tracks
+                console.log('[Stream Info]', {
+                    videoTracks: combinedStream.getVideoTracks().length,
+                    audioTracks: combinedStream.getAudioTracks().length
+                });
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play()
                             .then(resolve)
                             .catch(error => {
-                                console.error('Error playing video:', error);
+                                utils.handleError(error, 'Error playing video');
                                 resolve();
                             });
                     };
                 });
             } catch (err) {
-                console.error('Error accessing media devices:', err);
-                showStatus('Unable to access camera or microphone. Please check permissions.', 5000);
+                utils.handleError(err, 'Error accessing media devices');
                 throw err;
             }
         }
 
-        // Add device-specific event handlers
-        document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible') {
-                // Restart camera when app comes back to foreground
-                await startCamera(currentFacingMode);
-            }
-        });
-
-        // Prevent screen rotation issues
-        window.addEventListener('orientationchange', async () => {
-            // Wait for orientation change to complete
-            await new Promise(resolve => setTimeout(resolve, 100));
+        // Enhanced recording handler
+        function initializeMediaRecorder(stream) {
+            if (!stream) return null;
             
-            // Restart camera to adjust to new orientation
-            if (document.getElementById('camera').srcObject) {
-                await startCamera(currentFacingMode);
+            // Try different MIME types
+            const mimeTypes = [
+                'video/webm;codecs=vp8,opus',
+                'video/webm;codecs=vp9,opus',
+                'video/webm;codecs=h264,opus',
+                'video/webm'
+            ];
+            
+            let options;
+            for (const mimeType of mimeTypes) {
+                if (MediaRecorder.isTypeSupported(mimeType)) {
+                    options = { mimeType };
+                    console.log('Using MIME type:', mimeType);
+                    break;
+                }
+            }
+            
+            try {
+                return new MediaRecorder(stream, options);
+            } catch (e) {
+                utils.handleError(e, 'MediaRecorder creation failed');
+                return new MediaRecorder(stream);
+            }
+        }
+
+        // Enhanced event listeners
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await startCamera();
+                
+                // Add iOS specific class
+                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                    document.body.classList.add('ios-device');
+                }
+                
+                // Initialize zoom controls
+                initializeZoomControls();
+            } catch (error) {
+                utils.handleError(error, 'Initialization failed');
             }
         });
 
         // Cleanup on page unload
         window.addEventListener('beforeunload', () => {
-            const video = document.getElementById('camera');
-            if (video.srcObject) {
-                video.srcObject.getTracks().forEach(track => track.stop());
+            if (currentStream) {
+                utils.cleanupMediaStream(currentStream);
             }
         });
 
-        // Prevent iOS double-tap zoom
-        document.addEventListener('touchend', (event) => {
-            event.preventDefault();
-            event.target.click();
-        }, { passive: false });
-
-        // Initialize camera after DOM is fully loaded
-        document.addEventListener('DOMContentLoaded', async () => {
-            await startCamera();
-            
-            // Add iOS specific class if needed
-            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                document.body.classList.add('ios-device');
+        // Handle visibility changes
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                try {
+                    await startCamera(currentFacingMode);
+                } catch (error) {
+                    utils.handleError(error, 'Error resuming camera');
+                }
+            } else {
+                if (currentStream) {
+                    utils.cleanupMediaStream(currentStream);
+                }
             }
+        });
 
-            // Add zoom controls event listeners
-            document.querySelectorAll('.zoom-button').forEach(button => {
-                button.addEventListener('click', () => {
-                    const zoomLevel = parseFloat(button.dataset.zoom);
-                    setZoom(zoomLevel);
-                });
-            });
-
-            const zoomSlider = document.getElementById('zoomSlider');
-            zoomSlider.addEventListener('input', (e) => {
-                setZoom(parseFloat(e.target.value));
-            });
+        // Handle orientation changes
+        window.addEventListener('orientationchange', async () => {
+            await new Promise(resolve => setTimeout(resolve, 100));
+            try {
+                await startCamera(currentFacingMode);
+            } catch (error) {
+                utils.handleError(error, 'Error handling orientation change');
+            }
         });
 
         // Update capture function for better iOS compatibility

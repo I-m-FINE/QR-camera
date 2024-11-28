@@ -35,55 +35,131 @@
 
         .camera-container {
             width: 100%;
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
+            height: 100vh;
             position: relative;
             overflow: hidden !important;
-            margin: 0;
+            background-color: #000;
         }
 
         #camera {
             width: 100%;
             height: 100%;
             object-fit: cover;
-            background-color: #2a2a2a;
-            transform-origin: center;
-            transition: transform 0.2s ease-out;
-            border-radius: 0;
         }
 
+        /* Updated button container for camera-like layout */
         .button-container {
             position: absolute;
             bottom: 0;
-            width: 100%;
+            left: 0;
+            right: 0;
             display: flex;
+            justify-content: space-around;
+            align-items: center;
+            padding: 20px;
+            background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
+            gap: 20px;
+        }
+
+        /* Styled buttons to look more like camera controls */
+        .button {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 10px;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 5px;
+            font-size: 14px;
+        }
+
+        /* Main capture button */
+        #capture {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: white;
+            border: 4px solid rgba(255,255,255,0.8);
+            padding: 0;
+            transition: transform 0.2s;
+        }
+
+        #capture:active {
+            transform: scale(0.95);
+        }
+
+        /* Record button styling */
+        #recordButton {
+            width: 70px;
+            height: 70px;
+            border-radius: 50%;
+            background: #ff4444;
+            border: 4px solid rgba(255,255,255,0.8);
+            padding: 0;
+        }
+
+        #recordButton.recording {
+            background: #ff0000;
+            animation: pulse 1.5s infinite;
+        }
+
+        /* Switch camera button */
+        #switchCamera {
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
+            background: rgba(255,255,255,0.3);
+            display: flex;
+            align-items: center;
             justify-content: center;
-            gap: 12px;
-            padding: 16px;
-            z-index: 2;
-            background: linear-gradient(to top, rgba(0,0,0,0.5), transparent);
         }
 
-        /* Landscape orientation styles */
-        @media screen and (orientation: landscape) {
-            .container {
-                flex-direction: row;
-            }
-
-            .button-container {
-                position: absolute;
-                right: 0;
-                height: 100%;
-                width: auto;
-                flex-direction: column;
-                justify-content: center;
-                background: linear-gradient(to left, rgba(0,0,0,0.5), transparent);
-            }
+        /* Zoom controls in a more subtle design */
+        .zoom-controls {
+            position: absolute;
+            right: 20px;
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px 5px;
+            border-radius: 25px;
         }
 
-        /* Preview elements */
+        .zoom-button {
+            background: transparent;
+            border: none;
+            color: white;
+            padding: 8px;
+            font-size: 12px;
+            opacity: 0.8;
+        }
+
+        #zoomSlider {
+            writing-mode: bt-lr;
+            -webkit-appearance: none;
+            width: 100px;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 2px;
+            transform: rotate(-90deg);
+            margin: 40px 0;
+        }
+
+        #zoomSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 18px;
+            height: 18px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        /* Preview styling */
         #preview, #videoPreview {
             position: absolute;
             top: 0;
@@ -91,116 +167,44 @@
             width: 100%;
             height: 100%;
             object-fit: contain;
+            background-color: black;
             display: none;
-            border-radius: 0;
-            background-color: #2a2a2a;
         }
 
-        /* Status message improvements */
-        .status-message {
-            position: fixed;
-            top: env(safe-area-inset-top, 20px);
-            left: 50%;
-            transform: translateX(-50%);
-            background-color: rgba(33, 33, 33, 0.95);
-            color: white;
-            padding: 12px 24px;
-            border-radius: 30px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.2);
-            z-index: 1000;
-            display: none;
-            animation: slideDown 0.3s ease;
-            max-width: 90%;
-            text-align: center;
-        }
-
-        /* Button styles remain the same but add rotation handling */
-        .button {
-            padding: 14px 24px;
-            border: none;
-            border-radius: 30px;
-            cursor: pointer;
-            font-size: 16px;
-            font-weight: 600;
-            min-width: 130px;
-            transition: all 0.3s ease;
-            background-color: #2196F3;
-            color: white;
-            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
-            position: relative;
-            overflow: hidden;
-            transform: rotate(0deg);
-        }
-
-        @media screen and (orientation: landscape) {
-            .button {
-                transform: rotate(0deg);
-                margin: 4px 0;
-            }
-        }
-
-        /* iOS specific fixes */
-        @supports (-webkit-touch-callout: none) {
-            html, body {
-                height: -webkit-fill-available;
-            }
-
-            .container {
-                height: -webkit-fill-available;
-            }
-
-            #camera {
-                object-fit: cover;
-            }
-        }
-
-        /* Zoom controls */
-        .zoom-controls {
+        /* Upload button */
+        #upload {
             position: absolute;
             bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px 16px;
-            border-radius: 20px;
-            z-index: 3;
-        }
-
-        .zoom-button {
-            background: rgba(255, 255, 255, 0.2);
+            right: 20px;
+            background: #2196F3;
+            color: white;
             border: none;
-            color: white;
-            padding: 4px 12px;
-            border-radius: 15px;
-            cursor: pointer;
-            font-size: 14px;
+            padding: 12px 24px;
+            border-radius: 25px;
+            display: none;
         }
 
-        .zoom-button:hover {
-            background: rgba(255, 255, 255, 0.3);
+        /* Animation for recording button */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
         }
 
-        #zoomSlider {
-            width: 100px;
-            margin: 0 8px;
-        }
-
-        #zoomLevel {
-            color: white;
-            min-width: 40px;
-            text-align: center;
-        }
-
+        /* Landscape mode adjustments */
         @media screen and (orientation: landscape) {
-            .zoom-controls {
-                flex-direction: column;
-                left: unset;
-                right: 20px;
+            .button-container {
+                right: 0;
                 bottom: 50%;
                 transform: translateY(50%);
+                flex-direction: column;
+                width: auto;
+                background: linear-gradient(to left, rgba(0,0,0,0.7), transparent);
+            }
+
+            .zoom-controls {
+                right: unset;
+                left: 20px;
             }
         }
     </style>
@@ -208,23 +212,27 @@
 <body>
     <div class="container">
         <div class="camera-container">
-            <video id="camera" autoplay playsinline muted onloadedmetadata="this.play()" onerror="handleVideoError(event)"></video>
+            <video id="camera" autoplay playsinline muted></video>
             <img id="preview" alt="Preview">
-            <video id="videoPreview" controls></video>
+            <video id="videoPreview" controls muted></video>
+            
+            <div class="zoom-controls">
+                <button class="zoom-button" data-zoom="0.5">0.5x</button>
+                <input type="range" id="zoomSlider" min="0.5" max="10" step="0.1" value="1" orient="vertical">
+                <button class="zoom-button" data-zoom="2">2x</button>
+            </div>
+
+            <div class="button-container">
+                <button id="switchCamera" class="button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                        <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5l3.5 3.5-3.5 3.5z"/>
+                    </svg>
+                </button>
+                <button id="capture" class="button"></button>
+                <button id="recordButton" class="button"></button>
+            </div>
         </div>
-        <div class="zoom-controls">
-            <button class="zoom-button" data-zoom="0.5">0.5x</button>
-            <button class="zoom-button" data-zoom="1">1x</button>
-            <button class="zoom-button" data-zoom="2">2x</button>
-            <input type="range" id="zoomSlider" min="0.5" max="10" step="0.1" value="1">
-            <span id="zoomLevel">1x</span>
-        </div>
-        <div class="button-container">
-            <button id="switchCamera" class="button">Switch Camera</button>
-            <button id="capture" class="button">Take Photo</button>
-            <button id="recordButton" class="button">Record Video</button>
-            <button id="upload" class="button" style="display:none;">Upload to Drive</button>
-        </div>
+        <button id="upload" class="button">Upload</button>
     </div>
     <div class="status-message" id="statusMessage"></div>
     <canvas id="canvas" style="display:none;"></canvas>

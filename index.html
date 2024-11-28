@@ -279,6 +279,33 @@
                 padding-right: env(safe-area-inset-right);
             }
         }
+
+        /* Update upload button styles and handling */
+        #upload {
+            position: relative;
+            z-index: 1002; /* Ensure it's above other controls */
+            cursor: pointer;
+            pointer-events: auto;
+            opacity: 1;
+            transition: opacity 0.3s;
+        }
+
+        #upload.loading {
+            opacity: 0.7;
+            pointer-events: none;
+        }
+
+        #upload:active {
+            transform: scale(0.95);
+        }
+
+        /* iOS specific upload button fixes */
+        @supports (-webkit-touch-callout: none) {
+            .ios-device #upload {
+                -webkit-tap-highlight-color: transparent;
+                touch-action: manipulation;
+            }
+        }
     </style>
 </head>
 <body>
@@ -1006,130 +1033,66 @@
         });
 
         // Optimized upload handler
-        document.getElementById('upload').addEventListener('click', async () => {
+        document.getElementById('upload').addEventListener('click', async function(e) {
+            e.preventDefault(); // Prevent any default behavior
+            
+            // Provide immediate feedback
+            this.classList.add('clicked');
+            setTimeout(() => this.classList.remove('clicked'), 200);
+
             if (typeof uploadToDrive === 'undefined') {
                 showStatus('Upload functionality not ready. Please try again.', 5000);
                 return;
             }
             
-            if (imageBlob || videoBlob) {
-                const uploadBtn = document.getElementById('upload');
-                uploadBtn.disabled = true;
-                uploadBtn.classList.add('loading');
-                
-                try {
-                    // Show upload progress
-                    showStatus('Starting upload...');
-                    
-                    // Optimize image if it's a photo
-                    if (imageBlob) {
-                        // Create a web worker for image processing
-                        const workerBlob = new Blob([`
-                            self.onmessage = async function(e) {
-                                const { blob, maxWidth, maxHeight } = e.data;
-                                
-                                // Create image bitmap
-                                const imageBitmap = await createImageBitmap(blob);
-                                
-                                // Calculate new dimensions
-                                let width = imageBitmap.width;
-                                let height = imageBitmap.height;
-                                
-                                if (width > maxWidth) {
-                                    height = (height * maxWidth) / width;
-                                    width = maxWidth;
-                                }
-                                
-                                if (height > maxHeight) {
-                                    width = (width * maxHeight) / height;
-                                    height = maxHeight;
-                                }
-                                
-                                // Create canvas and draw image
-                                const canvas = new OffscreenCanvas(width, height);
-                                const ctx = canvas.getContext('2d');
-                                ctx.drawImage(imageBitmap, 0, 0, width, height);
-                                
-                                // Convert to blob
-                                const newBlob = await canvas.convertToBlob({
-                                    type: 'image/jpeg',
-                                    quality: 0.92
-                                });
-                                
-                                self.postMessage({ blob: newBlob });
-                            };
-                        `], { type: 'application/javascript' });
-                        
-                        const worker = new Worker(URL.createObjectURL(workerBlob));
-                        
-                        const optimizedBlob = await new Promise((resolve) => {
-                            worker.onmessage = (e) => resolve(e.data.blob);
-                            worker.postMessage({
-                                blob: imageBlob,
-                                maxWidth: 4096,  // Max width while maintaining quality
-                                maxHeight: 4096  // Max height while maintaining quality
-                            });
-                        });
-                        
-                        worker.terminate();
-                        URL.revokeObjectURL(workerBlob);
-                        
-                        await uploadToDrive(optimizedBlob, 'image');
-                    } else if (videoBlob) {
-                        // For video, use chunks to upload
-                        const chunkSize = 1024 * 1024; // 1MB chunks
-                        const totalChunks = Math.ceil(videoBlob.size / chunkSize);
-                        
-                        for (let i = 0; i < totalChunks; i++) {
-                            const start = i * chunkSize;
-                            const end = Math.min(start + chunkSize, videoBlob.size);
-                            const chunk = videoBlob.slice(start, end);
-                            
-                            await uploadToDrive(chunk, 'video', {
-                                isChunk: true,
-                                chunkIndex: i,
-                                totalChunks: totalChunks
-                            });
-                            
-                            // Update progress
-                            const progress = Math.round(((i + 1) / totalChunks) * 100);
-                            showStatus(`Uploading: ${progress}%`);
-                        }
-                    }
-                    
-                    showStatus('Upload complete!');
-                    uploadBtn.textContent = 'Upload to Drive';
-                    uploadBtn.style.display = 'none';
-                    
-                    // Clear previews
-                    const preview = document.getElementById('preview');
-                    const videoPreview = document.getElementById('videoPreview');
-                    preview.style.display = 'none';
-                    videoPreview.style.display = 'none';
-                    preview.src = '';
-                    videoPreview.src = '';
-                    
-                    // Reset blobs
-                    imageBlob = null;
-                    videoBlob = null;
-                    recordedChunks = [];
-                    
-                    // Restart camera
-                    setTimeout(async () => {
-                        try {
-                            await startCamera(currentFacingMode);
-                        } catch (error) {
-                            console.error('Error restarting camera:', error);
-                        }
-                    }, 100);
-                    
-                } catch (error) {
-                    console.error('Upload failed:', error);
-                    showStatus('Upload failed. Please try again.', 5000);
-                } finally {
-                    uploadBtn.disabled = false;
-                    uploadBtn.classList.remove('loading');
+            if (!imageBlob && !videoBlob) {
+                showStatus('No content to upload', 3000);
+                return;
+            }
+
+            try {
+                this.disabled = true;
+                this.classList.add('loading');
+                showStatus('Starting upload...');
+
+                if (imageBlob) {
+                    await uploadToDrive(imageBlob, 'image');
+                } else if (videoBlob) {
+                    await uploadToDrive(videoBlob, 'video');
                 }
+
+                showStatus('Upload complete!');
+                this.textContent = 'Upload to Drive';
+                this.style.display = 'none';
+                
+                // Clear previews
+                const preview = document.getElementById('preview');
+                const videoPreview = document.getElementById('videoPreview');
+                preview.style.display = 'none';
+                videoPreview.style.display = 'none';
+                preview.src = '';
+                videoPreview.src = '';
+                
+                // Reset blobs
+                imageBlob = null;
+                videoBlob = null;
+                recordedChunks = [];
+                
+                // Restart camera
+                setTimeout(async () => {
+                    try {
+                        await startCamera(currentFacingMode);
+                    } catch (error) {
+                        console.error('Error restarting camera:', error);
+                    }
+                }, 100);
+                
+            } catch (error) {
+                console.error('Upload failed:', error);
+                showStatus('Upload failed. Please try again.', 5000);
+            } finally {
+                this.disabled = false;
+                this.classList.remove('loading');
             }
         });
 
@@ -1207,7 +1170,7 @@
         }
 
         
-        console.log('Camera App v1.2.4'); 
+        console.log('Camera App v1.2.5'); 
     </script>
 </body>
 </html>

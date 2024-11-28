@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.4.0');</script>
+    <script>console.log('Camera App v1.4.1');</script>
     <style>
         * {
             margin: 0;
@@ -755,63 +755,84 @@
             }
         });
 
-        // Update record button for automatic upload
-        document.getElementById('recordButton').addEventListener('click', () => {
+        // Update video recording with audio support
+        document.getElementById('recordButton').addEventListener('click', async () => {
             const recordBtn = document.getElementById('recordButton');
             const video = document.getElementById('camera');
             const videoPreview = document.getElementById('videoPreview');
             
+            // Request audio access when starting recording
             if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                // Start new recording
-                recordedChunks = [];
-                mediaRecorder = new MediaRecorder(video.srcObject, {
-                    mimeType: 'video/webm;codecs=vp8,opus'
-                });
-                
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) recordedChunks.push(e.data);
-                };
-                
-                mediaRecorder.onstop = async () => {
-                    try {
-                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                try {
+                    // Get audio stream
+                    const audioStream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: true,
+                        video: false 
+                    });
+                    
+                    // Combine video and audio streams
+                    const videoStream = video.srcObject;
+                    const tracks = [...videoStream.getTracks(), ...audioStream.getTracks()];
+                    const combinedStream = new MediaStream(tracks);
+                    
+                    // Start new recording with combined stream
+                    recordedChunks = [];
+                    mediaRecorder = new MediaRecorder(combinedStream, {
+                        mimeType: 'video/webm;codecs=vp8,opus'
+                    });
+                    
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) recordedChunks.push(e.data);
+                    };
+                    
+                    mediaRecorder.onstop = async () => {
+                        // Stop audio stream when recording ends
+                        audioStream.getTracks().forEach(track => track.stop());
                         
-                        // Show preview while uploading
-                        videoPreview.src = URL.createObjectURL(blob);
-                        videoPreview.style.display = 'block';
-                        videoPreview.muted = true;
-                        
-                        // Upload automatically
-                        showStatus('Uploading video...');
-                        await uploadToDrive(blob, 'video');
-                        showStatus('Upload complete!', 2000);
-                        
-                        // Hide preview after upload
-                        setTimeout(() => {
-                            videoPreview.style.display = 'none';
-                            videoPreview.src = '';
-                        }, 2000);
-                        
-                    } catch (error) {
-                        console.error('Video upload failed:', error);
-                        showStatus('Upload failed. Retrying...', 2000);
-                        
-                        // Retry once
-                        setTimeout(async () => {
-                            try {
-                                await uploadToDrive(blob, 'video');
-                                showStatus('Upload complete!', 2000);
-                            } catch (retryError) {
-                                showStatus('Upload failed', 2000);
-                            }
-                        }, 3000);
-                    }
-                };
-                
-                mediaRecorder.start(1000);
-                recordBtn.textContent = 'Stop Recording';
-                recordBtn.classList.add('recording');
-                showStatus('Recording started');
+                        try {
+                            const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                            
+                            // Show preview with audio
+                            videoPreview.src = URL.createObjectURL(blob);
+                            videoPreview.style.display = 'block';
+                            videoPreview.muted = false; // Enable audio in preview
+                            
+                            // Upload automatically
+                            showStatus('Uploading video...');
+                            await uploadToDrive(blob, 'video');
+                            showStatus('Upload complete!', 2000);
+                            
+                            // Hide preview after upload
+                            setTimeout(() => {
+                                videoPreview.style.display = 'none';
+                                videoPreview.src = '';
+                            }, 2000);
+                            
+                        } catch (error) {
+                            console.error('Video upload failed:', error);
+                            showStatus('Upload failed. Retrying...', 2000);
+                            
+                            // Retry once
+                            setTimeout(async () => {
+                                try {
+                                    await uploadToDrive(blob, 'video');
+                                    showStatus('Upload complete!', 2000);
+                                } catch (retryError) {
+                                    showStatus('Upload failed', 2000);
+                                }
+                            }, 3000);
+                        }
+                    };
+                    
+                    mediaRecorder.start(1000);
+                    recordBtn.textContent = 'Stop Recording';
+                    recordBtn.classList.add('recording');
+                    showStatus('Recording started');
+                    
+                } catch (error) {
+                    console.error('Failed to start recording:', error);
+                    showStatus('Failed to access microphone', 2000);
+                }
                 
             } else {
                 // Stop recording and trigger upload
@@ -1120,7 +1141,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.4.0');
+        console.log('Camera App v1.4.1');
     </script>
 </body>
 </html>

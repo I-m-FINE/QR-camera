@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.5.9');</script>
+    <script>console.log('Camera App v1.6.1');</script>
     <style>
         * {
             margin: 0;
@@ -1283,7 +1283,6 @@
                     return;
                 }
 
-                // Create upload status element if it doesn't exist
                 let statusEl = document.getElementById('uploadStatus');
                 if (!statusEl) {
                     statusEl = document.createElement('div');
@@ -1304,7 +1303,6 @@
                     document.body.appendChild(statusEl);
                 }
 
-                // Show initial status
                 const updateStatus = (text, progress = '') => {
                     statusEl.innerHTML = `
                         <div>${text}</div>
@@ -1314,16 +1312,44 @@
 
                 updateStatus('Starting upload...');
 
-                // For small files, use direct upload
-                if (blob.size < 5 * 1024 * 1024) { // Less than 5MB
+                // First, check/create app folder
+                updateStatus('Checking folder...');
+                let folderId = localStorage.getItem('appFolderId');
+                
+                if (!folderId) {
+                    // Create app folder if it doesn't exist
+                    const folderMetadata = {
+                        name: 'QR Camera Uploads',
+                        mimeType: 'application/vnd.google-apps.folder'
+                    };
+
+                    const folderResponse = await fetch('https://www.googleapis.com/drive/v3/files', {
+                        method: 'POST',
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'application/json'
+                        },
+                        body: JSON.stringify(folderMetadata)
+                    });
+
+                    if (!folderResponse.ok) throw new Error('Failed to create folder');
+                    const folder = await folderResponse.json();
+                    folderId = folder.id;
+                    localStorage.setItem('appFolderId', folderId);
+                }
+
+                // Prepare file metadata with folder
+                const metadata = {
+                    name: `${type}_${new Date().toISOString()}.${type === 'video' ? 'mp4' : 'jpg'}`,
+                    mimeType: type === 'video' ? 'video/mp4' : 'image/jpeg',
+                    parents: [folderId]
+                };
+
+                // For small files
+                if (blob.size < 5 * 1024 * 1024) {
                     updateStatus('Uploading file...');
                     
                     const formData = new FormData();
-                    const metadata = {
-                        name: `${type}_${new Date().toISOString()}.${type === 'video' ? 'mp4' : 'jpg'}`,
-                        mimeType: type === 'video' ? 'video/mp4' : 'image/jpeg'
-                    };
-                    
                     formData.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
                     formData.append('file', blob);
 
@@ -1342,18 +1368,9 @@
                     return;
                 }
 
-                // For larger files, use chunked upload
-                const CHUNK_SIZE = 10 * 1024 * 1024; // 10MB chunks
-                const totalChunks = Math.ceil(blob.size / CHUNK_SIZE);
-                
-                // Initialize upload session
-                const metadata = {
-                    name: `${type}_${new Date().toISOString()}.${type === 'video' ? 'mp4' : 'jpg'}`,
-                    mimeType: type === 'video' ? 'video/mp4' : 'image/jpeg'
-                };
-
+                // For larger files
                 updateStatus('Initializing upload...', '0%');
-
+                
                 const sessionResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=resumable', {
                     method: 'POST',
                     headers: {
@@ -1363,16 +1380,19 @@
                     body: JSON.stringify(metadata)
                 });
 
+                if (!sessionResponse.ok) throw new Error('Failed to initialize upload');
+                
                 const uploadUrl = sessionResponse.headers.get('Location');
+                const CHUNK_SIZE = 10 * 1024 * 1024;
+                const totalChunks = Math.ceil(blob.size / CHUNK_SIZE);
                 let uploadedChunks = 0;
 
-                // Upload chunks
                 for (let i = 0; i < totalChunks; i++) {
                     const start = i * CHUNK_SIZE;
                     const end = Math.min(start + CHUNK_SIZE, blob.size);
                     const chunk = blob.slice(start, end);
                     
-                    await fetch(uploadUrl, {
+                    const chunkResponse = await fetch(uploadUrl, {
                         method: 'PUT',
                         headers: {
                             'Content-Range': `bytes ${start}-${end - 1}/${blob.size}`
@@ -1399,7 +1419,7 @@
         }
 
         // Update version
-        console.log('Camera App v1.5.9');
+        console.log('Camera App v1.6.1');
     </script>
 </body>
 </html>

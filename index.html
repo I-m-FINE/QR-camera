@@ -352,67 +352,99 @@
             }
         };
 
-        // Add fullscreen utilities
+        // Add iOS-specific fullscreen handling
         const fullscreenUtils = {
+            isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
+
             async enterFullscreen() {
-                const container = document.querySelector('.container');
-                try {
+                const container = document.querySelector('.camera-container');
+                if (!container) return;
+
+                if (this.isIOS) {
+                    // iOS fullscreen handling
+                    document.body.classList.add('ios-fullscreen');
+                    container.style.height = window.innerHeight + 'px';
+                    // Lock to portrait orientation for iOS
+                    if (window.screen && window.screen.orientation) {
+                        try {
+                            await window.screen.orientation.lock('portrait');
+                        } catch (e) {
+                            console.log('Orientation lock not supported');
+                        }
+                    }
+                } else {
+                    // Original fullscreen for other devices
                     if (container.requestFullscreen) {
                         await container.requestFullscreen();
                     } else if (container.webkitRequestFullscreen) {
                         await container.webkitRequestFullscreen();
-                    } else if (container.msRequestFullscreen) {
-                        await container.msRequestFullscreen();
                     } else if (container.mozRequestFullScreen) {
                         await container.mozRequestFullScreen();
                     }
-                    
-                    // Lock screen orientation to portrait if supported
-                    if (screen.orientation && screen.orientation.lock) {
-                        try {
-                            await screen.orientation.lock('portrait');
-                        } catch (orientationError) {
-                            console.log('Orientation lock not supported');
-                        }
-                    }
-                    
-                    // Add fullscreen class for styling
-                    document.body.classList.add('fullscreen-mode');
-                    
-                } catch (error) {
-                    utils.handleError(error, 'Unable to enter fullscreen mode');
                 }
             },
 
             async exitFullscreen() {
-                try {
+                if (this.isIOS) {
+                    document.body.classList.remove('ios-fullscreen');
+                } else {
                     if (document.exitFullscreen) {
                         await document.exitFullscreen();
                     } else if (document.webkitExitFullscreen) {
                         await document.webkitExitFullscreen();
-                    } else if (document.msExitFullscreen) {
-                        await document.msExitFullscreen();
                     } else if (document.mozCancelFullScreen) {
                         await document.mozCancelFullScreen();
                     }
-                    
-                    // Remove fullscreen class
-                    document.body.classList.remove('fullscreen-mode');
-                    
-                } catch (error) {
-                    utils.handleError(error, 'Unable to exit fullscreen mode');
                 }
             },
 
             isFullscreen() {
-                return !!(
-                    document.fullscreenElement ||
-                    document.webkitFullscreenElement ||
-                    document.mozFullScreenElement ||
-                    document.msFullscreenElement
-                );
+                if (this.isIOS) {
+                    return document.body.classList.contains('ios-fullscreen');
+                }
+                return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
             }
         };
+
+        // Add iOS-specific styles
+        const fullscreenStyles = document.createElement('style');
+        fullscreenStyles.textContent = `
+            /* iOS fullscreen styles */
+            .ios-fullscreen {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+            }
+
+            .ios-fullscreen .camera-container {
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100vw;
+                height: 100vh;
+                height: -webkit-fill-available;
+                background: black;
+                z-index: 9999;
+            }
+
+            .ios-fullscreen #camera {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            /* Handle iOS safe areas */
+            @supports (padding: max(0px)) {
+                .ios-fullscreen .camera-container {
+                    padding-top: env(safe-area-inset-top);
+                    padding-bottom: env(safe-area-inset-bottom);
+                }
+            }
+        `;
+        document.head.appendChild(fullscreenStyles);
 
         // Add zoom control initialization
         function initializeZoomControls() {
@@ -999,8 +1031,7 @@
 
         function handleFullscreenChange() {
             if (!fullscreenUtils.isFullscreen()) {
-                // Optionally re-enter fullscreen or handle exit
-                document.body.classList.remove('fullscreen-mode');
+                document.body.classList.remove('ios-fullscreen');
             }
         }
 

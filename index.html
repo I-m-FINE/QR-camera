@@ -209,1055 +209,182 @@
         <div id="statusMessage" class="status-message"></div>
     </div>
     <script>
-        :root {
-            --camera-height: 65vh;
-            --button-spacing: 12px;
-            --control-size: 40px;
+        // Debug logging
+        function debugLog(message, data = null) {
+            console.log(`[Camera Debug] ${message}`, data || '');
         }
 
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        :root {
-            /* Dynamic variables based on screen size */
-            --camera-height: 60vh;
-            --button-spacing: 10px;
-            --control-size: 40px;
-        }
-
-        body {
-            background: #000;
-            height: 100vh;
-            height: -webkit-fill-available;
-            overflow: hidden;
-        }
-
-        .container {
-            height: 100vh;
-            height: -webkit-fill-available;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-        }
-
-        .camera-container {
-            width: 100%;
-            height: var(--camera-height);
-            position: relative;
-            overflow: hidden;
-            background: #000;
-        }
-
-        #camera {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .button-container {
-            position: fixed;
-            left: 50%;
-            transform: translateX(-50%);
-            bottom: calc(var(--button-spacing) * 10);
-            display: flex;
-            flex-direction: column;
-            gap: var(--button-spacing);
-            width: min(90%, 300px);
-            z-index: 10;
-        }
-
-        .button {
-            width: 100%;
-            padding: 12px;
-            border: none;
-            border-radius: 25px;
-            background: #2196F3;
-            color: white;
-            font-size: clamp(14px, 4vw, 16px);
-            font-weight: 500;
-        }
-
-        .zoom-controls {
-            position: fixed;
-            bottom: var(--button-spacing);
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px;
-            border-radius: 20px;
-            z-index: 10;
-            width: fit-content;
-        }
-
-        .zoom-button {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            padding: 5px 10px;
-            border-radius: 15px;
-            font-size: clamp(12px, 3.5vw, 14px);
-            min-width: 45px;
-            text-align: center;
-        }
-
-        #zoomSlider {
-            width: clamp(80px, 30vw, 120px);
-            margin: 0 8px;
-        }
-
-        .camera-controls {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background-color: rgba(0, 0, 0, 0.8);
-            display: none;
-            z-index: 1000;
-        }
-
-        .control-button {
-            background: rgba(255, 255, 255, 0.2);
-            border: none;
-            color: white;
-            width: var(--control-size);
-            height: var(--control-size);
-            border-radius: 50%;
-            opacity: 0;
-            pointer-events: none;
-        }
-
-        .control-button:active {
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .focus-animation {
-            animation: focusFrameAnimation 0.3s ease-out;
-        }
-
-        .status-message {
-            position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 10px 20px;
-            border-radius: 20px;
-            z-index: 1000;
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-
-        .status-visible {
-            opacity: 1;
-        }
-
-        .recording {
-            background: #ff4444 !important;
-        }
-
-        /* Preview elements */
-        #preview, #videoPreview {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background-color: rgba(0, 0, 0, 0.9);
-            display: none;
-            z-index: 1000;
-        }
-
-        /* Upload buttons */
-        #uploadPhoto, #uploadVideo {
-            display: none;
-            background: #2196F3;
-            color: white;
-            border: none;
-            padding: 10px 20px;
-            border-radius: 5px;
-            cursor: pointer;
-            margin: 5px;
-        }
-
-        /* Grid overlay */
-        .grid-overlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            display: none;
-            pointer-events: none;
-        }
-
-        .grid-line {
-            position: absolute;
-            background: rgba(255, 255, 255, 0.3);
-        }
-
-        .grid-line.vertical {
-            width: 1px;
-            height: 100%;
-        }
-
-        .grid-line.horizontal {
-            height: 1px;
-            width: 100%;
-        }
-
-        .vertical:nth-child(1) { left: 33.33%; }
-        .vertical:nth-child(2) { left: 66.66%; }
-        .horizontal:nth-child(3) { top: 33.33%; }
-        .horizontal:nth-child(4) { top: 66.66%; }
-
-        /* iOS specific fixes */
-        @supports (-webkit-touch-callout: none) {
-            body, .container {
-                height: -webkit-fill-available;
-            }
-        }
-
-        @supports (padding: env(safe-area-inset-top)) {
-            .container {
-                padding-top: env(safe-area-inset-top);
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-        }
-
-        /* Landscape mode */
-        @media screen and (orientation: landscape) {
-            .container {
-                flex-direction: row;
-                padding: env(safe-area-inset-top) env(safe-area-inset-right) 
-                         env(safe-area-inset-bottom) env(safe-area-inset-left);
-            }
-
-            .camera-controls {
-                flex-direction: column;
-                left: auto;
-                right: 20px;
-                top: 50%;
-                transform: translateY(-50%);
-            }
-
-            .button-container {
-                position: relative;
-                bottom: auto;
-                right: 20px;
-                width: auto;
-            }
-        }
-
-        async function switchCamera() {
-            currentFacingMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            console.log('Switching to:', currentFacingMode);
-            await startCamera();
-        }
-
-        // Update your initialization
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await startCamera();
-                
-                // Add event listeners
-                document.getElementById('switchCamera').addEventListener('click', switchCamera);
-                
-                // Handle page visibility changes
-                document.addEventListener('visibilitychange', () => {
-                    if (document.visibilityState === 'visible') {
-                        startCamera();
-                    }
-                });
-
-            } catch (error) {
-                console.error('Initialization failed:', error);
-                showStatus('Failed to initialize camera');
-            }
-        });
-
-        // Add this to ensure proper cleanup
-        window.addEventListener('beforeunload', () => {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-        });
-
-        // Add this helper function
-        function showStatus(message) {
-            console.log(message);  // Log to console for debugging
-            // Implement your status display logic here
-        }
-
-        // Prevent screen rotation on iOS
-        window.addEventListener('orientationchange', async () => {
-            // Wait for orientation change to complete
-            await new Promise(resolve => setTimeout(resolve, 100));
-            
-            // Restart camera to adjust to new orientation
-            if (document.getElementById('camera').srcObject) {
-                await startCamera(currentFacingMode);
-            }
-        });
-
-        // Handle iOS specific issues
-        document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible') {
-                // Restart camera when app comes back to foreground
-                await startCamera(currentFacingMode);
-            }
-        });
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-        });
-
-        // Prevent iOS double-tap zoom
-        document.addEventListener('touchend', (event) => {
-            event.preventDefault();
-            event.target.click();
-        }, { passive: false });
-
-        // Initialize camera after DOM is fully loaded
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await initializeCamera();
-                
-                // Event listeners with error handling
-                const addSafeEventListener = (id, event, handler) => {
-                    const element = document.getElementById(id);
-                    if (element) {
-                        element.addEventListener(event, async (e) => {
-                            try {
-                                await handler(e);
-                            } catch (error) {
-                                console.error(`Error in ${id} handler:`, error);
-                                showStatus('Operation failed');
-                            }
-                        });
-                    }
-                };
-
-                addSafeEventListener('switchCamera', 'click', switchCamera);
-                addSafeEventListener('capture', 'click', capturePhoto);
-                addSafeEventListener('recordButton', 'click', toggleRecording);
-                addSafeEventListener('flashButton', 'click', toggleFlash);
-                
-            } catch (error) {
-                console.error('Initialization failed:', error);
-                showStatus('Failed to initialize camera');
-            }
-        });
-
-        async function initializeCamera() {
-            try {
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Camera API not supported');
-                }
-
-                await getCameras();
-                
-                if (cameras.length === 0) {
-                    throw new Error('No cameras found');
-                }
-
-                // Request camera permissions explicitly
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                });
-
-                const video = document.getElementById('camera');
-                video.srcObject = stream;
-                currentStream = stream;
-
-                // Ensure video plays after metadata is loaded
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        video.play()
-                            .then(resolve)
-                            .catch(e => console.error('Error playing video:', e));
-                    };
-                });
-
-                // Initialize camera controls after successful start
-                await setupCameraControls();
-                isInitialized = true;
-                showStatus('Camera ready');
-
-            } catch (error) {
-                console.error('Camera initialization failed:', error);
-                showStatus('Failed to access camera: ' + error.message);
-            }
-        }
-
-        // Setup camera controls
-        async function setupCameraControls() {
-            const track = currentStream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities();
-
-            // Setup flash control
-            const flashButton = document.getElementById('flashButton');
-            if (capabilities.torch) {
-                flashButton.style.display = 'block';
-                flashButton.addEventListener('click', toggleFlash);
-            } else {
-                flashButton.style.display = 'none';
-            }
-
-            // Setup zoom control
-            const zoomControls = document.querySelector('.zoom-controls');
-            if (capabilities.zoom) {
-                const zoomSlider = document.getElementById('zoomSlider');
-                zoomSlider.min = capabilities.zoom.min || 1;
-                zoomSlider.max = capabilities.zoom.max || 10;
-                zoomSlider.value = currentZoom;
-                zoomControls.style.display = 'flex';
-            } else {
-                zoomControls.style.display = 'none';
-            }
-        }
-
-        // Update your toggleFlash function
-        async function toggleFlash() {
-            if (!currentStream) return;
-            
-            const track = currentStream.getVideoTracks()[0];
-            const capabilities = track.getCapabilities();
-            
-            if (!capabilities.torch) {
-                alert('Flash not supported on this device');
-                return;
-            }
-            
-            isFlashOn = !isFlashOn;
-            try {
-                await track.applyConstraints({
-                    advanced: [{ torch: isFlashOn }]
-                });
-                document.getElementById('flashButton').classList.toggle('active', isFlashOn);
-            } catch (error) {
-                console.error('Error toggling flash:', error);
-                alert('Error toggling flash');
-            }
-        }
-
-        // Add this function to handle responsive layout
-        function adjustLayout() {
-            const root = document.documentElement;
-            const windowHeight = window.innerHeight;
-            const windowWidth = window.innerWidth;
-            
-            // Adjust camera height based on screen size
-            if (windowHeight < 600) {
-                root.style.setProperty('--camera-height', '50vh');
-                root.style.setProperty('--button-spacing', '8px');
-            } else if (windowHeight < 800) {
-                root.style.setProperty('--camera-height', '60vh');
-                root.style.setProperty('--button-spacing', '10px');
-            } else {
-                root.style.setProperty('--camera-height', '65vh');
-                root.style.setProperty('--button-spacing', '12px');
-            }
-
-            // Adjust for different screen widths
-            if (windowWidth < 360) {
-                root.style.setProperty('--control-size', '35px');
-            } else {
-                root.style.setProperty('--control-size', '40px');
-            }
-        }
-
-        // Call on load and resize
-        window.addEventListener('load', adjustLayout);
-        window.addEventListener('resize', adjustLayout);
-        window.addEventListener('orientationchange', () => {
-            // Small delay to ensure orientation change is complete
-            setTimeout(adjustLayout, 100);
-        });
-
-        // Add to your existing DOMContentLoaded event
-        document.addEventListener('DOMContentLoaded', () => {
-            adjustLayout();
-            // ... your existing initialization code ...
-        });
-
-        // Photo capture function
-        async function capturePhoto() {
-            debugLog('Starting photo capture');
-            if (isProcessing) {
-                debugLog('Already processing, returning');
-                return;
-            }
-            isProcessing = true;
-
-            try {
-                const video = document.getElementById('camera');
-                if (!video || !video.srcObject) {
-                    throw new Error('Camera not ready');
-                }
-
-                // Create canvas and capture frame
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                
-                const context = canvas.getContext('2d');
-                context.drawImage(video, 0, 0);
-
-                // Convert to blob
-                const capturedBlob = await new Promise((resolve, reject) => {
-                    canvas.toBlob((blob) => {
-                        if (blob) {
-                            resolve(blob);
-                        } else {
-                            reject(new Error('Failed to create blob'));
-                        }
-                    }, 'image/jpeg', 0.8);
-                });
-
-                debugLog('Photo captured successfully', { size: capturedBlob.size });
-
-                // Store the captured photo
-                if (!window.capturedMedia) {
-                    window.capturedMedia = {};
-                }
-                window.capturedMedia.currentPhoto = capturedBlob;
-
-                // Show upload button
-                const uploadButton = document.getElementById('uploadPhoto');
-                if (uploadButton) {
-                    uploadButton.style.display = 'block';
-                    debugLog('Upload button displayed');
-                }
-
-                showStatus('Photo captured successfully');
-
-            } catch (error) {
-                debugLog('Photo capture error:', error);
-                showStatus('Failed to capture photo: ' + error.message);
-            } finally {
-                isProcessing = false;
-            }
-        }
-
-        // Update the event listener
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialize camera
-            initializeCamera().catch(error => {
-                debugLog('Camera initialization failed:', error);
-                showStatus('Failed to initialize camera');
-            });
-
-            // Add capture button listener
-            const captureButton = document.getElementById('capture');
-            if (captureButton) {
-                captureButton.addEventListener('click', async () => {
-                    try {
-                        await capturePhoto();
-                    } catch (error) {
-                        debugLog('Capture error:', error);
-                        showStatus('Failed to capture: ' + error.message);
-                    }
-                });
-            }
-
-            // ... rest of your event listeners ...
-        });
-
-        // Update the video recording handler
-        async function toggleRecording() {
-            if (isProcessing) return;
-            
-            const recordButton = document.getElementById('recordButton');
-            
-            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                try {
-                    recordedChunks = [];
-                    mediaRecorder = new MediaRecorder(currentStream, { mimeType: 'video/webm;codecs=vp8,opus' });
-                    
-                    mediaRecorder.ondataavailable = (e) => {
-                        if (e.data.size > 0) recordedChunks.push(e.data);
-                    };
-                    
-                    mediaRecorder.onstop = async () => {
-                        debugLog('Video recording stopped');
-                        try {
-                            const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                            debugLog('Video blob created', { blobSize: videoBlob.size });
-                            
-                            lastCaptureBlob = videoBlob;
-                            await updatePreviewButton(videoBlob);
-                            window.handleCapture(videoBlob, 'video');
-                            showStatus('Recording ready');
-                            
-                        } catch (error) {
-                            debugLog('ERROR: Video processing failed', error);
-                            showStatus('Failed to process video');
-                        }
-                    };
-                    
-                    mediaRecorder.start();
-                    recordButton.textContent = 'Stop Recording';
-                    recordButton.classList.add('recording');
-                    showStatus('Recording started...');
-                    
-                } catch (error) {
-                    console.error('Failed to start recording:', error);
-                    showStatus('Failed to start recording');
-                }
-            } else {
-                mediaRecorder.stop();
-                recordButton.textContent = 'Record Video';
-                recordButton.classList.remove('recording');
-                showStatus('Recording stopped');
-            }
-        }
-
-        // Fixed preview button update function
-        async function updatePreviewButton(blob) {
-            try {
-                const previewButton = document.getElementById('previewButton');
-                const previewThumbnail = document.getElementById('previewThumbnail');
-                
-                if (!previewButton || !previewThumbnail || !blob) {
-                    console.error('Missing elements for preview update');
-                    return;
-                }
-
-                // Revoke old URL if it exists
-                if (previewThumbnail.dataset.blobUrl) {
-                    URL.revokeObjectURL(previewThumbnail.dataset.blobUrl);
-                }
-
-                // Create new URL
-                const url = URL.createObjectURL(blob);
-                previewThumbnail.dataset.blobUrl = url;
-                
-                // Set new image
-                previewThumbnail.src = url;
-                previewButton.style.display = 'block';
-
-            } catch (error) {
-                console.error('Preview update error:', error);
-            }
-        }
-
-        // Fixed upload functions
-        async function uploadToGoogleDrive(blob, type) {
-            try {
-                showStatus('Starting upload...');
-                
-                // Check if we're authenticated
-                if (!gapi.client.getToken()) {
-                    return new Promise((resolve, reject) => {
-                        tokenClient.callback = async (resp) => {
-                            if (resp.error !== undefined) {
-                                reject(resp);
-                                return;
-                            }
-                            try {
-                                await uploadFile(blob, type);
-                                resolve();
-                            } catch (error) {
-                                reject(error);
-                            }
-                        };
-                        tokenClient.requestAccessToken({ prompt: 'consent' });
-                    });
-                }
-                
-                await uploadFile(blob, type);
-            } catch (error) {
-                console.error('Upload error:', error);
-                showStatus('Upload failed. Please try again.');
-                throw error;
-            }
-        }
-
-        async function uploadFile(blob, type) {
-            try {
-                const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-                const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
-
-                // Convert blob to base64
-                const base64Data = await new Promise((resolve, reject) => {
-                    const reader = new FileReader();
-                    reader.onloadend = () => resolve(reader.result.split(',')[1]);
-                    reader.onerror = reject;
-                    reader.readAsDataURL(blob);
-                });
-
-                const metadata = {
-                    name: fileName,
-                    mimeType: type === 'image' ? 'image/jpeg' : 'video/webm',
-                };
-
-                const response = await gapi.client.drive.files.create({
-                    resource: metadata,
-                    media: {
-                        mimeType: metadata.mimeType,
-                        body: base64Data
-                    },
-                    fields: 'id,webViewLink'
-                });
-
-                console.log('File uploaded successfully:', response.result.webViewLink);
-                showStatus('Upload successful!');
-                return response.result;
-
-            } catch (error) {
-                console.error('Upload failed:', error);
-                showStatus('Upload failed. Retrying...');
-                throw error;
-            }
-        }
-
-        function handleVideoError(error) {
-            console.error('Video error:', error);
-            alert('Error loading video stream. Please check your camera permissions.');
-        }
-
-        // Function to show status message
-        function showStatus(message) {
-            const status = document.getElementById('statusMessage');
-            status.textContent = message;
-            status.style.display = 'block';
-            status.classList.add('status-visible');
-            
-            setTimeout(() => {
-                status.classList.remove('status-visible');
-            }, 3000);
-        }
-
-        function setZoom(zoomLevel) {
-            const video = document.getElementById('camera');
-            const container = document.querySelector('.camera-container');
-            
-            // Ensure zoom level is within valid range
-            zoomLevel = Math.min(Math.max(zoomLevel, 0.5), 10);
-            currentZoom = zoomLevel;
-
-            // Calculate the new dimensions
-            const scale = 1 / zoomLevel;
-            
-            // Calculate dimensions to maintain aspect ratio
-            const newWidth = videoWidth * scale;
-            const newHeight = videoHeight * scale;
-            
-            // Calculate position to keep center
-            const leftOffset = (videoWidth - newWidth) / 2;
-            const topOffset = (videoHeight - newHeight) / 2;
-            
-            // Apply the zoom effect
-            video.style.width = `${videoWidth}px`;
-            video.style.height = `${videoHeight}px`;
-            video.style.transform = `scale(${zoomLevel})`;
-            video.style.transformOrigin = 'center center';
-            video.style.objectFit = 'cover';
-            
-            // Update UI
-            document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
-            document.getElementById('zoomSlider').value = zoomLevel;
-        }
-
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('capture').addEventListener('click', capturePhoto);
-            document.getElementById('recordButton').addEventListener('click', toggleRecording);
-        });
-
-        // Make sure your button is properly styled
-        const style = document.createElement('style');
-        style.textContent = `
-            .button {
-                width: 100%;
-                padding: 12px;
-                border: none;
-                border-radius: 25px;
-                background: #2196F3;
-                color: white;
-                font-size: 16px;
-                font-weight: 500;
-                cursor: pointer;
-                transition: background-color 0.3s;
-            }
-
-            .button:disabled {
-                background: #ccc;
-                cursor: not-allowed;
-            }
-
-            .button:not(:disabled):hover {
-                background: #1976D2;
-            }
-        `;
-        document.head.appendChild(style);
-
-        // After taking a photo
-        function capturePhoto() {
-            // ... existing photo capture code ...
-            currentPhoto = blob;
-            document.getElementById('uploadPhoto').style.display = 'block';
-        }
-
-        // After recording a video
-        function stopRecording() {
-            // ... existing video recording code ...
-            currentVideo = blob;
-            document.getElementById('uploadVideo').style.display = 'block';
-        }
-
-        // Add event listeners for upload buttons
-        document.getElementById('uploadPhoto').addEventListener('click', async () => {
-            if (currentPhoto) {
-                await uploadToGoogleDrive(currentPhoto, 'image');
-            }
-        });
-
-        document.getElementById('uploadVideo').addEventListener('click', async () => {
-            if (currentVideo) {
-                await uploadToGoogleDrive(currentVideo, 'video');
-            }
-        });
-
-        // Add these event listeners after your existing ones
-        document.getElementById('uploadPhoto')?.addEventListener('click', async () => {
-            if (window.capturedMedia.currentPhoto) {
-                await window.uploadToGoogleDrive(window.capturedMedia.currentPhoto, 'image');
-            }
-        });
-
-        document.getElementById('uploadVideo')?.addEventListener('click', async () => {
-            if (window.capturedMedia.currentVideo) {
-                await window.uploadToGoogleDrive(window.capturedMedia.currentVideo, 'video');
-            }
-        });
-
-        // Camera controls
-        async function toggleFlash() {
-            try {
-                if (!track || !flashSupported) return;
-                const capabilities = track.getCapabilities();
-                const settings = track.getSettings();
-                
-                const newState = !settings.torch;
-                await track.applyConstraints({
-                    advanced: [{ torch: newState }]
-                });
-                
-                document.getElementById('toggleFlash').classList.toggle('active', newState);
-                showStatus(newState ? 'Flash on' : 'Flash off');
-            } catch (error) {
-                debugLog('Flash toggle error:', error);
-                showStatus('Failed to toggle flash');
-            }
-        }
-
-        async function switchCamera() {
-            if (availableCameras.length <= 1) {
-                showStatus('No other cameras available');
-                return;
-            }
-            
-            currentCameraIndex = (currentCameraIndex + 1) % availableCameras.length;
-            debugLog('Switching to camera:', currentCameraIndex);
-            await startCamera();
-        }
-
-        function toggleGrid() {
-            const grid = document.querySelector('.grid-overlay');
-            const isVisible = grid.style.display === 'block';
-            grid.style.display = isVisible ? 'none' : 'block';
-        }
-
-        // Zoom control
-        async function setZoom(zoomLevel) {
-            try {
-                if (!track) return;
-                
-                const capabilities = track.getCapabilities();
-                if (!capabilities.zoom) return;
-                
-                zoomLevel = Math.min(Math.max(zoomLevel, capabilities.zoom.min), capabilities.zoom.max);
-                await track.applyConstraints({ advanced: [{ zoom: zoomLevel }] });
-                
-                currentZoom = zoomLevel;
-                document.getElementById('zoomSlider').value = zoomLevel;
-                debugLog('Zoom set to:', zoomLevel);
-            } catch (error) {
-                debugLog('Zoom error:', error);
-            }
-        }
-
-        // Photo capture
-        async function capturePhoto() {
-            if (isProcessing) return;
-            isProcessing = true;
-            
-            try {
-                const video = document.getElementById('camera');
-                const canvas = document.createElement('canvas');
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                
-                const context = canvas.getContext('2d');
-                context.drawImage(video, 0, 0);
-                
-                const capturedBlob = await new Promise((resolve) => {
-                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
-                });
-
-                if (!capturedBlob) {
-                    throw new Error('Failed to capture photo');
-                }
-
-                debugLog('Photo captured', { size: capturedBlob.size });
-                window.capturedMedia.currentPhoto = capturedBlob;
-                
-                // Show upload button
-                const uploadButton = document.getElementById('uploadPhoto');
-                if (uploadButton) {
-                    uploadButton.style.display = 'block';
-                }
-
-                showStatus('Photo captured');
-                
-            } catch (error) {
-                debugLog('Photo capture error:', error);
-                showStatus('Failed to capture photo');
-            } finally {
-                isProcessing = false;
-            }
-        }
-
-        // Video recording
-        function startRecording() {
-            try {
-                if (!currentStream) return;
-                
-                recordedChunks = [];
-                mediaRecorder = new MediaRecorder(currentStream, {
-                    mimeType: 'video/webm;codecs=vp8,opus'
-                });
-
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                    }
-                };
-
-                mediaRecorder.onstop = async () => {
-                    try {
-                        const videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                        window.capturedMedia.currentVideo = videoBlob;
-                        
-                        // Show upload button
-                        const uploadButton = document.getElementById('uploadVideo');
-                        if (uploadButton) {
-                            uploadButton.style.display = 'block';
-                        }
-                        
-                        showStatus('Recording ready');
-                        debugLog('Video recorded', { size: videoBlob.size });
-                    } catch (error) {
-                        debugLog('Video processing error:', error);
-                        showStatus('Failed to process video');
-                    }
-                };
-
-                mediaRecorder.start();
-                showStatus('Recording started');
-                
-            } catch (error) {
-                debugLog('Recording error:', error);
-                showStatus('Failed to start recording');
-            }
-        }
-
-        function stopRecording() {
-            if (mediaRecorder && mediaRecorder.state !== 'inactive') {
-                mediaRecorder.stop();
-                showStatus('Recording stopped');
-            }
-        }
-
-        // Event listeners
-        document.addEventListener('DOMContentLoaded', () => {
-            // Initialize camera
-            initializeCamera().catch(error => {
-                debugLog('Camera initialization failed:', error);
-                showStatus('Failed to initialize camera');
-            });
-
-            // Add error handling to all event listeners
-            document.getElementById('switchCamera')?.addEventListener('click', switchCamera);
-            document.getElementById('toggleGrid')?.addEventListener('click', toggleGrid);
-            document.getElementById('toggleFlash')?.addEventListener('click', toggleFlash);
-            document.getElementById('capture')?.addEventListener('click', capturePhoto);
-            
-            // Add proper error handling for upload buttons
-            document.getElementById('uploadPhoto')?.addEventListener('click', async () => {
-                if (!window.capturedMedia.currentPhoto) {
-                    showStatus('No photo to upload');
-                    return;
-                }
-                try {
-                    showStatus('Starting upload...');
-                    await window.uploadToGoogleDrive(window.capturedMedia.currentPhoto, 'image');
-                    showStatus('Upload complete');
-                } catch (error) {
-                    debugLog('Upload failed:', error);
-                    showStatus('Upload failed: ' + error.message);
-                }
-            });
-
-            document.getElementById('uploadVideo')?.addEventListener('click', async () => {
-                if (!window.capturedMedia.currentVideo) {
-                    showStatus('No video to upload');
-                    return;
-                }
-                try {
-                    showStatus('Starting upload...');
-                    await window.uploadToGoogleDrive(window.capturedMedia.currentVideo, 'video');
-                    showStatus('Upload complete');
-                } catch (error) {
-                    debugLog('Upload failed:', error);
-                    showStatus('Upload failed: ' + error.message);
-                }
-            });
-        });
-
-        // Initialize global variables properly
-        window.capturedMedia = {
-            currentPhoto: null,
-            currentVideo: null
-        };
-
+        // Global variables
         let currentStream = null;
         let mediaRecorder = null;
         let recordedChunks = [];
         let isProcessing = false;
-        let currentZoom = 1;
-        let availableCameras = [];
-        let currentCameraIndex = 0;
-        let flashSupported = false;
-        let track = null;
+
+        // Check camera permissions
+        async function checkCameraPermissions() {
+            try {
+                const result = await navigator.permissions.query({ name: 'camera' });
+                debugLog('Camera permission status:', result.state);
+                return result.state;
+            } catch (error) {
+                debugLog('Error checking camera permissions:', error);
+                return 'unknown';
+            }
+        }
+
+        // Initialize camera
+        async function startCamera() {
+            debugLog('Starting camera initialization');
+            
+            try {
+                // Check if mediaDevices is supported
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported in this browser');
+                }
+
+                // Check permissions
+                const permissionStatus = await checkCameraPermissions();
+                debugLog('Permission status:', permissionStatus);
+
+                // Stop any existing stream
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => {
+                        track.stop();
+                        debugLog('Stopped existing track:', track.label);
+                    });
+                }
+
+                // List available devices
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                debugLog('Available video devices:', videoDevices);
+
+                // Request camera access
+                const constraints = {
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    },
+                    audio: false
+                };
+
+                debugLog('Requesting camera with constraints:', constraints);
+                currentStream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Get video element
+                const videoElement = document.getElementById('camera');
+                if (!videoElement) {
+                    throw new Error('Video element not found');
+                }
+
+                // Set video source
+                videoElement.srcObject = currentStream;
+                videoElement.setAttribute('playsinline', true);
+                videoElement.setAttribute('autoplay', true);
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    videoElement.onloadedmetadata = () => {
+                        debugLog('Video metadata loaded');
+                        resolve();
+                    };
+                });
+
+                // Play video
+                await videoElement.play();
+                debugLog('Camera started successfully');
+                showStatus('Camera ready');
+
+            } catch (error) {
+                debugLog('Error starting camera:', error);
+                showStatus('Camera error: ' + error.message);
+                throw error;
+            }
+        }
+
+        // Status message helper
+        function showStatus(message) {
+            debugLog('Status:', message);
+            const statusElement = document.getElementById('statusMessage');
+            if (statusElement) {
+                statusElement.textContent = message;
+                statusElement.classList.add('status-visible');
+                setTimeout(() => {
+                    statusElement.classList.remove('status-visible');
+                }, 3000);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            debugLog('Page loaded, initializing camera');
+            
+            try {
+                await startCamera();
+                
+                // Add button listeners after camera is initialized
+                const switchButton = document.getElementById('switchCamera');
+                if (switchButton) {
+                    switchButton.addEventListener('click', async () => {
+                        debugLog('Switch camera clicked');
+                        try {
+                            await startCamera();
+                        } catch (error) {
+                            debugLog('Switch camera error:', error);
+                            showStatus('Failed to switch camera');
+                        }
+                    });
+                }
+
+                const captureButton = document.getElementById('capture');
+                if (captureButton) {
+                    captureButton.addEventListener('click', async () => {
+                        debugLog('Capture button clicked');
+                        if (isProcessing) return;
+                        isProcessing = true;
+
+                        try {
+                            const video = document.getElementById('camera');
+                            const canvas = document.createElement('canvas');
+                            canvas.width = video.videoWidth;
+                            canvas.height = video.videoHeight;
+                            
+                            const context = canvas.getContext('2d');
+                            context.drawImage(video, 0, 0);
+                            
+                            const capturedBlob = await new Promise((resolve) => {
+                                canvas.toBlob(resolve, 'image/jpeg', 0.8);
+                            });
+
+                            window.capturedMedia = window.capturedMedia || {};
+                            window.capturedMedia.currentPhoto = capturedBlob;
+                            debugLog('Photo captured', { size: capturedBlob.size });
+                            
+                            showStatus('Photo captured');
+                        } catch (error) {
+                            debugLog('Capture error:', error);
+                            showStatus('Failed to capture photo');
+                        } finally {
+                            isProcessing = false;
+                        }
+                    });
+                }
+            } catch (error) {
+                debugLog('Initialization error:', error);
+                showStatus('Failed to initialize camera');
+            }
+        });
+
+        // Handle page visibility
+        document.addEventListener('visibilitychange', () => {
+            debugLog('Visibility changed:', document.visibilityState);
+            if (document.visibilityState === 'visible') {
+                startCamera().catch(error => {
+                    debugLog('Visibility change camera error:', error);
+                });
+            }
+        });
     </script>
 </body>
 </html>

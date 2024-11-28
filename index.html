@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.4.9');</script>
+    <script>console.log('Camera App v1.5.0');</script>
     <style>
         * {
             margin: 0;
@@ -1155,84 +1155,90 @@
             const existingLogin = document.querySelector('.ios-login-container');
             if (existingLogin) existingLogin.remove();
 
-            // Create container with absolute positioning
+            // Create elements separately for better control
             const container = document.createElement('div');
+            const loginBox = document.createElement('div');
+            const title = document.createElement('div');
+            const text = document.createElement('div');
+            const signInButton = document.createElement('button');
+
+            // Set classes
             container.className = 'ios-login-container';
-            container.innerHTML = `
-                <style>
-                    .ios-login-container {
-                        position: fixed;
-                        top: 0;
-                        left: 0;
-                        width: 100%;
-                        height: 100%;
-                        background: rgba(0, 0, 0, 0.9);
-                        z-index: 9999;
-                        display: flex;
-                        align-items: center;
-                        justify-content: center;
-                    }
+            loginBox.className = 'ios-login-box';
+            title.className = 'ios-login-title';
+            text.className = 'ios-login-text';
+            signInButton.className = 'ios-sign-in-btn';
+            signInButton.id = 'iosSignInButton';
 
-                    .ios-login-box {
-                        background: white;
-                        padding: 20px;
-                        border-radius: 12px;
-                        width: 85%;
-                        max-width: 300px;
-                        text-align: center;
-                    }
+            // Set content
+            title.textContent = 'Sign in Required';
+            text.textContent = 'To enable automatic upload of photos and videos, please sign in with your Google account.';
+            signInButton.textContent = 'Sign in with Google';
 
-                    .ios-login-title {
-                        color: #333;
-                        font-size: 18px;
-                        margin-bottom: 15px;
-                    }
-
-                    .ios-login-text {
-                        color: #666;
-                        font-size: 14px;
-                        margin-bottom: 20px;
-                        line-height: 1.4;
-                    }
-
-                    .ios-sign-in-btn {
-                        display: block;
-                        background: #4285f4;
-                        color: white;
-                        font-size: 16px;
-                        padding: 12px 24px;
-                        border-radius: 24px;
-                        border: none;
-                        width: 100%;
-                        box-sizing: border-box;
-                        font-weight: bold;
-                        -webkit-appearance: none;
-                        -webkit-tap-highlight-color: transparent;
-                        touch-action: manipulation;
-                        user-select: none;
-                        -webkit-user-select: none;
-                        cursor: pointer;
-                        text-decoration: none;
-                        margin: 0 auto;
-                    }
-                </style>
-                <div class="ios-login-box">
-                    <div class="ios-login-title">Sign in Required</div>
-                    <div class="ios-login-text">To enable automatic upload of photos and videos, please sign in with your Google account.</div>
-                    <a href="#" class="ios-sign-in-btn" id="iosSignInButton">Sign in with Google</a>
-                </div>
+            // Style container
+            container.style.cssText = `
+                position: fixed;
+                top: 0;
+                left: 0;
+                width: 100%;
+                height: 100%;
+                background: rgba(0, 0, 0, 0.9);
+                z-index: 9999;
+                display: flex;
+                align-items: center;
+                justify-content: center;
             `;
 
-            // Add to body
+            // Style login box
+            loginBox.style.cssText = `
+                background: white;
+                padding: 20px;
+                border-radius: 12px;
+                width: 85%;
+                max-width: 300px;
+                text-align: center;
+            `;
+
+            // Style title
+            title.style.cssText = `
+                color: #333;
+                font-size: 18px;
+                margin-bottom: 15px;
+                font-weight: bold;
+            `;
+
+            // Style text
+            text.style.cssText = `
+                color: #666;
+                font-size: 14px;
+                margin-bottom: 20px;
+                line-height: 1.4;
+            `;
+
+            // Style button
+            signInButton.style.cssText = `
+                background: #4285f4;
+                color: white;
+                font-size: 16px;
+                padding: 12px 24px;
+                border-radius: 24px;
+                border: none;
+                width: 100%;
+                font-weight: bold;
+                cursor: pointer;
+                -webkit-appearance: none;
+                appearance: none;
+            `;
+
+            // Build DOM
+            loginBox.appendChild(title);
+            loginBox.appendChild(text);
+            loginBox.appendChild(signInButton);
+            container.appendChild(loginBox);
             document.body.appendChild(container);
 
-            // Add multiple event listeners for maximum compatibility
-            const signInButton = document.getElementById('iosSignInButton');
-            
-            const handleSignIn = (e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                
+            // Add click handler directly
+            signInButton.onclick = function(e) {
                 const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
                     `client_id=${YOUR_CLIENT_ID}` +
                     `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
@@ -1240,56 +1246,36 @@
                     `&scope=https://www.googleapis.com/auth/drive.file` +
                     `&prompt=consent`;
                 
-                window.location.href = authUrl;
-                return false;
+                window.location = authUrl;
             };
 
-            // Add multiple event listeners
-            signInButton.onclick = handleSignIn;
-            signInButton.addEventListener('click', handleSignIn);
-            signInButton.addEventListener('touchend', handleSignIn);
-        }
+            // Add touch handler for iOS
+            signInButton.addEventListener('touchstart', function(e) {
+                this.style.opacity = '0.7';
+            });
 
-        // Force check auth status more frequently for iOS
-        if (isIOS) {
-            // Check immediately
-            if (!localStorage.getItem('googleToken')) {
-                createIOSLoginUI();
-            }
-            
-            // Check before any camera operation
-            ['capture', 'recordButton'].forEach(id => {
-                const element = document.getElementById(id);
-                if (element) {
-                    const originalClick = element.onclick;
-                    element.onclick = function(e) {
-                        if (!localStorage.getItem('googleToken')) {
-                            e.preventDefault();
-                            createIOSLoginUI();
-                            return false;
-                        }
-                        return originalClick ? originalClick.call(this, e) : true;
-                    };
-                }
+            signInButton.addEventListener('touchend', function(e) {
+                this.style.opacity = '1';
+                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                    `client_id=${YOUR_CLIENT_ID}` +
+                    `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
+                    `&response_type=token` +
+                    `&scope=https://www.googleapis.com/auth/drive.file` +
+                    `&prompt=consent`;
+                
+                window.location = authUrl;
             });
         }
 
-        // Handle auth callback
-        if (window.location.hash.includes('access_token')) {
-            const token = new URLSearchParams(window.location.hash.substr(1)).get('access_token');
-            if (token) {
-                localStorage.setItem('googleToken', token);
-                // Remove login UI if present
-                const loginUI = document.querySelector('.ios-login-container');
-                if (loginUI) {
-                    loginUI.remove();
-                }
-                showStatus('Successfully signed in!', 2000);
+        // Check auth status on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            if (isIOS && !localStorage.getItem('googleToken')) {
+                setTimeout(createIOSLoginUI, 1000);
             }
-        }
+        });
 
         // Update version
-        console.log('Camera App v1.4.9');
+        console.log('Camera App v1.5.0');
     </script>
 </body>
 </html>

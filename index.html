@@ -186,6 +186,31 @@
                 right: auto;
             }
         }
+
+        .fullscreen-mode {
+            width: 100vw;
+            height: 100vh;
+            margin: 0;
+            padding: 0;
+            background: #000;
+        }
+
+        .fullscreen-mode .container {
+            width: 100vw;
+            height: 100vh;
+            max-width: none;
+            margin: 0;
+            padding: 0;
+        }
+
+        .fullscreen-mode .camera-container {
+            border-radius: 0;
+        }
+
+        /* Hide system bars in fullscreen */
+        :fullscreen {
+            background: #000;
+        }
     </style>
 </head>
 <body>
@@ -273,6 +298,68 @@
             }
         };
 
+        // Add fullscreen utilities
+        const fullscreenUtils = {
+            async enterFullscreen() {
+                const container = document.querySelector('.container');
+                try {
+                    if (container.requestFullscreen) {
+                        await container.requestFullscreen();
+                    } else if (container.webkitRequestFullscreen) {
+                        await container.webkitRequestFullscreen();
+                    } else if (container.msRequestFullscreen) {
+                        await container.msRequestFullscreen();
+                    } else if (container.mozRequestFullScreen) {
+                        await container.mozRequestFullScreen();
+                    }
+                    
+                    // Lock screen orientation to portrait if supported
+                    if (screen.orientation && screen.orientation.lock) {
+                        try {
+                            await screen.orientation.lock('portrait');
+                        } catch (orientationError) {
+                            console.log('Orientation lock not supported');
+                        }
+                    }
+                    
+                    // Add fullscreen class for styling
+                    document.body.classList.add('fullscreen-mode');
+                    
+                } catch (error) {
+                    utils.handleError(error, 'Unable to enter fullscreen mode');
+                }
+            },
+
+            async exitFullscreen() {
+                try {
+                    if (document.exitFullscreen) {
+                        await document.exitFullscreen();
+                    } else if (document.webkitExitFullscreen) {
+                        await document.webkitExitFullscreen();
+                    } else if (document.msExitFullscreen) {
+                        await document.msExitFullscreen();
+                    } else if (document.mozCancelFullScreen) {
+                        await document.mozCancelFullScreen();
+                    }
+                    
+                    // Remove fullscreen class
+                    document.body.classList.remove('fullscreen-mode');
+                    
+                } catch (error) {
+                    utils.handleError(error, 'Unable to exit fullscreen mode');
+                }
+            },
+
+            isFullscreen() {
+                return !!(
+                    document.fullscreenElement ||
+                    document.webkitFullscreenElement ||
+                    document.mozFullScreenElement ||
+                    document.msFullscreenElement
+                );
+            }
+        };
+
         // Enhanced startCamera function
         async function startCamera(facingMode = 'environment') {
             try {
@@ -336,6 +423,11 @@
                     audioTracks: combinedStream.getAudioTracks().length
                 });
 
+                // Re-enter fullscreen if needed after camera switch
+                if (document.body.classList.contains('fullscreen-mode') && !fullscreenUtils.isFullscreen()) {
+                    await fullscreenUtils.enterFullscreen();
+                }
+
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play()
@@ -393,6 +485,10 @@
                 
                 // Initialize zoom controls
                 initializeZoomControls();
+
+                // Enter fullscreen after successful initialization
+                await fullscreenUtils.enterFullscreen();
+                
             } catch (error) {
                 utils.handleError(error, 'Initialization failed');
             }
@@ -652,6 +748,38 @@
             document.getElementById('zoomLevel').textContent = `${zoomLevel.toFixed(1)}x`;
             document.getElementById('zoomSlider').value = zoomLevel;
         }
+
+        // Handle fullscreen changes
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        function handleFullscreenChange() {
+            if (!fullscreenUtils.isFullscreen()) {
+                // Optionally re-enter fullscreen or handle exit
+                document.body.classList.remove('fullscreen-mode');
+            }
+        }
+
+        // Add fullscreen toggle button (optional)
+        const toggleFullscreenButton = document.createElement('button');
+        toggleFullscreenButton.className = 'button fullscreen-toggle';
+        toggleFullscreenButton.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
+            </svg>
+        `;
+        toggleFullscreenButton.addEventListener('click', async () => {
+            if (fullscreenUtils.isFullscreen()) {
+                await fullscreenUtils.exitFullscreen();
+            } else {
+                await fullscreenUtils.enterFullscreen();
+            }
+        });
+
+        // Add the button to your button container
+        document.querySelector('.button-container').appendChild(toggleFullscreenButton);
     </script>
 </body>
 </html>

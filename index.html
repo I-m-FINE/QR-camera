@@ -725,59 +725,43 @@
         // Enhanced camera initialization with proper error handling
         async function startCamera(facingMode = 'environment') {
             try {
-                // Check if getUserMedia is supported
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Camera API is not supported in this browser');
+                // First check and request permissions explicitly
+                const permissions = await navigator.permissions.query({ name: 'camera' });
+                if (permissions.state === 'denied') {
+                    throw new Error('Camera permission was denied. Please enable camera access in your browser settings.');
                 }
 
                 const video = document.getElementById('camera');
                 if (!video) {
                     throw new Error('Video element not found');
                 }
-                
-                // Cleanup existing stream
-                if (video.srcObject) {
-                    video.srcObject.getTracks().forEach(track => track.stop());
+
+                // Clear any existing streams
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
                 }
 
-                console.log('Requesting camera access...');
-                
-                // Request camera access with detailed constraints
                 const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
-                    },
-                    audio: false
+                    }
                 });
-
-                console.log('Camera access granted:', stream);
 
                 video.srcObject = stream;
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
-                // Wait for video to be ready
                 await new Promise((resolve) => {
-                    video.onloadedmetadata = () => {
-                        resolve();
-                    };
+                    video.onloadedmetadata = resolve;
                 });
 
-                console.log('Video metadata loaded');
-
-                // Ensure video plays
                 await video.play();
-                console.log('Video playback started');
-
-                // Update orientation
-                updateVideoOrientation();
 
             } catch (err) {
-                console.error('Detailed camera error:', err);
-                alert(`Camera access error: ${err.message}\nPlease ensure camera permissions are granted and try again.`);
-                throw err;
+                console.error('Camera initialization error:', err);
+                alert('Please grant camera permissions and refresh the page. Error: ' + err.message);
             }
         }
 
@@ -1178,33 +1162,27 @@
                 right: 0;
                 z-index: 1000;
                 display: flex;
-                justify-content: center; /* Center the buttons */
+                justify-content: center;
                 align-items: center;
                 gap: 20px;
                 padding: 0 20px;
+                background: linear-gradient(to top, rgba(0,0,0,0.3), transparent);
             }
 
-            /* Button order and layout */
-            #switchCamera {
-                order: 1;
-            }
-
-            #capture {
-                order: 2;
-            }
-
-            #recordButton {
-                order: 3;
-            }
-
+            /* Fixed upload button positioning */
             #upload {
+                position: relative !important; /* Override any absolute positioning */
+                top: auto !important;
+                left: auto !important;
                 order: 4;
-                display: none; /* Hidden by default, shown when needed */
+                display: none; /* Hidden by default */
+                margin: 0 20px;
             }
 
-            .fullscreen-toggle {
-                order: 5;
-            }
+            #switchCamera { order: 1; }
+            #capture { order: 2; }
+            #recordButton { order: 3; }
+            .fullscreen-toggle { order: 5; }
 
             /* iOS landscape mode */
             @supports (-webkit-touch-callout: none) {
@@ -1213,47 +1191,27 @@
                         flex-direction: column;
                         right: max(30px, env(safe-area-inset-right));
                         bottom: 50%;
-                        transform: translateY(50%);
+                        transform: translateY(-50%);
                         left: auto;
                         width: auto;
                         padding: 20px;
                     }
                     
-                    .ios-device .button-container > * {
+                    .ios-device #upload {
                         margin: 10px 0;
                     }
                 }
-
-                /* iOS portrait mode */
-                @media screen and (orientation: portrait) {
-                    .ios-device .button-container {
-                        bottom: max(30px, env(safe-area-inset-bottom));
-                        left: 0;
-                        right: 0;
-                        flex-direction: row;
-                        justify-content: center;
-                        padding: 0 20px;
-                    }
-                }
-            }
-
-            /* Non-iOS devices */
-            :not(.ios-device) .button-container {
-                flex-direction: row;
-                justify-content: center;
             }
         `;
 
-        // Remove any existing button styles
-        const existingButtonStyles = document.querySelectorAll('style[data-purpose="button-styles"]');
-        existingButtonStyles.forEach(style => style.remove());
-
-        // Add new styles
+        // Remove existing styles and add new ones
+        const existingStyles = document.querySelectorAll('style[data-purpose="button-styles"]');
+        existingStyles.forEach(style => style.remove());
         buttonStyles.setAttribute('data-purpose', 'button-styles');
         document.head.appendChild(buttonStyles);
 
         // Update version
-        console.log('Camera App v1.2.8');
+        console.log('Camera App v1.2.9');
     </script>
 </body>
 </html>

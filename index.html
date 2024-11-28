@@ -153,6 +153,47 @@
                 margin: 0 auto;
             }
         }
+
+        /* Add recording indicator styles */
+        #capture.recording {
+            background: #ff4444;
+            animation: pulse 1.5s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+
+        /* Recording timer display */
+        .recording-timer {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.5);
+            color: white;
+            padding: 5px 15px;
+            border-radius: 20px;
+            z-index: 1000;
+            display: none;
+        }
+
+        /* Recording indicator dot */
+        .recording-dot {
+            display: inline-block;
+            width: 8px;
+            height: 8px;
+            background-color: #ff4444;
+            border-radius: 50%;
+            margin-right: 5px;
+            animation: blink 1s infinite;
+        }
+
+        @keyframes blink {
+            50% { opacity: 0; }
+        }
     </style>
 </head>
 <body>
@@ -181,6 +222,12 @@
                 </button>
             </div>
         </div>
+    </div>
+
+    <!-- Add timer display -->
+    <div class="recording-timer">
+        <span class="recording-dot"></span>
+        <span id="recordingTime">00:00</span>
     </div>
 
     <script>
@@ -254,6 +301,153 @@
             const newMode = currentFacingMode === 'environment' ? 'user' : 'environment';
             startCamera(newMode);
         });
+
+        let mediaRecorder = null;
+        let recordedChunks = [];
+        let isRecording = false;
+        let recordingTimer = null;
+        let startTime = null;
+        let longPressTimeout = null;
+        const LONG_PRESS_DURATION = 500; // ms to trigger video recording
+
+        // Initialize capture button functionality
+        function initializeCaptureButton() {
+            const captureBtn = document.getElementById('capture');
+            const timerDisplay = document.querySelector('.recording-timer');
+
+            // Touch events for mobile
+            captureBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+                handlePressStart();
+            });
+
+            captureBtn.addEventListener('touchend', (e) => {
+                e.preventDefault();
+                handlePressEnd();
+            });
+
+            // Mouse events for desktop
+            captureBtn.addEventListener('mousedown', handlePressStart);
+            captureBtn.addEventListener('mouseup', handlePressEnd);
+            captureBtn.addEventListener('mouseleave', handlePressEnd);
+
+            function handlePressStart() {
+                longPressTimeout = setTimeout(() => {
+                    startRecording();
+                }, LONG_PRESS_DURATION);
+            }
+
+            function handlePressEnd() {
+                if (longPressTimeout) {
+                    clearTimeout(longPressTimeout);
+                }
+                
+                if (isRecording) {
+                    stopRecording();
+                } else if (!isRecording && longPressTimeout) {
+                    // Quick press - take photo
+                    takePhoto();
+                }
+            }
+
+            // Update recording timer
+            function updateTimer() {
+                if (!startTime) return;
+                
+                const elapsed = Date.now() - startTime;
+                const seconds = Math.floor(elapsed / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const displaySeconds = (seconds % 60).toString().padStart(2, '0');
+                const displayMinutes = minutes.toString().padStart(2, '0');
+                
+                document.getElementById('recordingTime').textContent = 
+                    `${displayMinutes}:${displaySeconds}`;
+            }
+
+            async function startRecording() {
+                try {
+                    recordedChunks = [];
+                    const stream = currentStream;
+                    
+                    if (!stream) {
+                        throw new Error('No camera stream available');
+                    }
+
+                    mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'video/webm;codecs=vp8,opus'
+                    });
+
+                    mediaRecorder.ondataavailable = (e) => {
+                        if (e.data.size > 0) {
+                            recordedChunks.push(e.data);
+                        }
+                    };
+
+                    mediaRecorder.start(200);
+                    isRecording = true;
+                    captureBtn.classList.add('recording');
+                    timerDisplay.style.display = 'block';
+                    startTime = Date.now();
+                    recordingTimer = setInterval(updateTimer, 1000);
+
+                } catch (error) {
+                    console.error('Error starting recording:', error);
+                    alert('Could not start recording: ' + error.message);
+                }
+            }
+
+            async function stopRecording() {
+                if (!mediaRecorder || mediaRecorder.state === 'inactive') return;
+
+                mediaRecorder.stop();
+                isRecording = false;
+                captureBtn.classList.remove('recording');
+                timerDisplay.style.display = 'none';
+                clearInterval(recordingTimer);
+                startTime = null;
+
+                // Handle the recorded video
+                mediaRecorder.onstop = () => {
+                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    // Handle the video (e.g., preview, upload, or download)
+                    handleRecordedVideo(url, blob);
+                };
+            }
+
+            function takePhoto() {
+                const video = document.getElementById('camera');
+                const canvas = document.createElement('canvas');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                const ctx = canvas.getContext('2d');
+                ctx.drawImage(video, 0, 0);
+                
+                // Convert to blob and handle the photo
+                canvas.toBlob((blob) => {
+                    handleCapturedPhoto(blob);
+                }, 'image/jpeg', 0.95);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', () => {
+            initializeCaptureButton();
+        });
+
+        // Handle captured media
+        function handleCapturedPhoto(blob) {
+            // Handle the photo (e.g., preview, upload, or download)
+            console.log('Photo captured:', blob);
+            // Add your photo handling code here
+        }
+
+        function handleRecordedVideo(url, blob) {
+            // Handle the video (e.g., preview, upload, or download)
+            console.log('Video recorded:', url);
+            // Add your video handling code here
+        }
     </script>
 </body>
 </html>

@@ -137,17 +137,57 @@
             background: #ff4444 !important;
             border-color: #cc0000 !important;
         }
+
+        /* Grid overlay */
+        .grid-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: none;
+            pointer-events: none;
+        }
+
+        .grid-line {
+            position: absolute;
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .grid-line.vertical {
+            width: 1px;
+            height: 100%;
+        }
+
+        .grid-line.horizontal {
+            height: 1px;
+            width: 100%;
+        }
+
+        .vertical:nth-child(1) { left: 33.33%; }
+        .vertical:nth-child(2) { left: 66.66%; }
+        .horizontal:nth-child(3) { top: 33.33%; }
+        .horizontal:nth-child(4) { top: 66.66%; }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="camera-container">
-            <video id="camera" autoplay playsinline></video>
+            <video id="camera" autoplay playsinline muted></video>
+            <div class="grid-overlay">
+                <div class="grid-line vertical"></div>
+                <div class="grid-line vertical"></div>
+                <div class="grid-line horizontal"></div>
+                <div class="grid-line horizontal"></div>
+            </div>
         </div>
 
         <div class="camera-controls">
             <button id="switchCamera" class="control-button" title="Switch Camera">
                 <i class="fas fa-sync-alt"></i>
+            </button>
+            <button id="toggleGrid" class="control-button" title="Toggle Grid">
+                <i class="fas fa-th"></i>
             </button>
             <button id="toggleFlash" class="control-button" title="Toggle Flash">
                 <i class="fas fa-bolt"></i>
@@ -155,9 +195,16 @@
         </div>
 
         <div class="button-container">
-            <button id="capture" class="button">Take Photo</button>
-            <button id="recordButton" class="button">Record Video</button>
+            <button id="capture" class="button" aria-label="Take Photo">Take Photo</button>
+            <button id="recordButton" class="button" aria-label="Record Video">Record Video</button>
         </div>
+
+        <button id="uploadPhoto" class="control-button" style="display: none;" aria-label="Upload Photo">
+            <i class="fas fa-cloud-upload-alt"></i>
+        </button>
+        <button id="uploadVideo" class="control-button" style="display: none;" aria-label="Upload Video">
+            <i class="fas fa-cloud-upload-alt"></i>
+        </button>
 
         <div id="statusMessage" class="status-message"></div>
     </div>

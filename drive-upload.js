@@ -5,13 +5,126 @@ const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 
 let accessToken = null;
 
-// Initialize Google Sign-in when page loads
-document.addEventListener('DOMContentLoaded', async () => {
-    try {
-        console.log('[' + new Date().toISOString() + '] Drive upload script loaded successfully');
-        await initializeGoogleAuth();
-    } catch (error) {
-        console.error('Error in DOMContentLoaded:', error);
+// Create an iOS-native friendly login UI
+function createIOSLoginUI() {
+    // Remove any existing login UI
+    const existingLogin = document.querySelector('.ios-login-container');
+    if (existingLogin) existingLogin.remove();
+
+    // Create elements
+    const container = document.createElement('div');
+    const loginBox = document.createElement('div');
+    const title = document.createElement('div');
+    const text = document.createElement('div');
+    const signInLink = document.createElement('a');
+
+    // Set classes and content
+    container.className = 'ios-login-container';
+    loginBox.className = 'ios-login-box';
+    title.className = 'ios-login-title';
+    text.className = 'ios-login-text';
+    signInLink.className = 'ios-sign-in-btn';
+    signInLink.id = 'iosSignInButton';
+
+    title.textContent = 'Sign in Required';
+    text.textContent = 'To enable automatic upload of photos and videos, please sign in with your Google account.';
+    signInLink.textContent = 'Sign in with Google';
+
+    // Style elements
+    container.style.cssText = `
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(0, 0, 0, 0.9);
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    `;
+
+    loginBox.style.cssText = `
+        background: white;
+        padding: 20px;
+        border-radius: 12px;
+        width: 85%;
+        max-width: 300px;
+        text-align: center;
+    `;
+
+    title.style.cssText = `
+        color: #333;
+        font-size: 18px;
+        margin-bottom: 15px;
+        font-weight: bold;
+    `;
+
+    text.style.cssText = `
+        color: #666;
+        font-size: 14px;
+        margin-bottom: 20px;
+        line-height: 1.4;
+    `;
+
+    signInLink.style.cssText = `
+        display: block;
+        background: #4285f4;
+        color: white;
+        font-size: 16px;
+        padding: 12px 24px;
+        border-radius: 24px;
+        text-decoration: none;
+        width: 80%;
+        margin: 0 auto;
+        font-weight: bold;
+        -webkit-tap-highlight-color: transparent;
+    `;
+
+    // Set direct auth URL
+    const redirectUri = 'https://i-m-fine.github.io/QR-camera/';
+    const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' + 
+        '?client_id=997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com' +
+        '&redirect_uri=' + encodeURIComponent(redirectUri) +
+        '&response_type=token' +
+        '&scope=https://www.googleapis.com/auth/drive.file';
+
+    signInLink.href = authUrl;
+
+    // Add click handler
+    signInLink.onclick = function(e) {
+        e.preventDefault();
+        console.log('Starting auth redirect...');
+        window.location.replace(authUrl);
+    };
+
+    // Build DOM
+    loginBox.appendChild(title);
+    loginBox.appendChild(text);
+    loginBox.appendChild(signInLink);
+    container.appendChild(loginBox);
+    document.body.appendChild(container);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    if (/iPad|iPhone|iPod/.test(navigator.userAgent) && !localStorage.getItem('googleToken')) {
+        console.log('iOS device detected, showing login UI');
+        setTimeout(createIOSLoginUI, 1000);
+    }
+});
+
+// Handle auth callback
+window.addEventListener('load', function() {
+    if (window.location.hash) {
+        const params = new URLSearchParams(window.location.hash.substring(1));
+        const token = params.get('access_token');
+        if (token) {
+            localStorage.setItem('googleToken', token);
+            const loginUI = document.querySelector('.ios-login-container');
+            if (loginUI) loginUI.remove();
+            showStatus('Successfully signed in!', 2000);
+        }
     }
 });
 

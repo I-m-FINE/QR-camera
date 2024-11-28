@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.6.4');</script>
+    <script>console.log('Camera App v1.6.5');</script>
     <style>
         * {
             margin: 0;
@@ -1337,6 +1337,97 @@
 
         // Update version
         console.log('Camera App v1.6.4');
+
+        // Clean up any existing Git conflict markers
+        document.addEventListener('DOMContentLoaded', () => {
+            // Remove any conflict markers from the page
+            document.body.innerHTML = document.body.innerHTML.replace(
+                /<<<<<<< HEAD|=======|>>>>>>> parent of .*/g, 
+                ''
+            );
+
+            // Reinitialize the camera interface
+            initializeCameraInterface();
+        });
+
+        function initializeCameraInterface() {
+            // Create camera container if it doesn't exist
+            if (!document.querySelector('.camera-container')) {
+                const cameraContainer = document.createElement('div');
+                cameraContainer.className = 'camera-container';
+                cameraContainer.innerHTML = `
+                    <video id="camera" playsinline autoplay muted></video>
+                    <div class="button-container">
+                        <button id="capture" class="button">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                                <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <button id="recordButton" class="button">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                                <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/>
+                                <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                            </svg>
+                        </button>
+                        <button id="switchCamera" class="button">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                                <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5l3.5 3.5-3.5 3.5z"/>
+                            </svg>
+                        </button>
+                    </div>
+                `;
+                document.body.appendChild(cameraContainer);
+            }
+
+            // Add necessary styles
+            const style = document.createElement('style');
+            style.textContent = `
+                .camera-container {
+                    width: 100vw;
+                    height: 100vh;
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    background: #000;
+                    overflow: hidden;
+                }
+                #camera {
+                    width: 100%;
+                    height: 100%;
+                    object-fit: cover;
+                }
+                .button-container {
+                    position: fixed;
+                    bottom: max(30px, env(safe-area-inset-bottom));
+                    left: 0;
+                    right: 0;
+                    display: flex;
+                    justify-content: center;
+                    gap: 20px;
+                    z-index: 1000;
+                }
+                .button {
+                    width: 64px;
+                    height: 64px;
+                    border-radius: 50%;
+                    background: rgba(0, 0, 0, 0.5);
+                    border: 2px solid white;
+                    padding: 0;
+                    display: flex;
+                    align-items: center;
+                    justify-content: center;
+                    cursor: pointer;
+                }
+            `;
+            document.head.appendChild(style);
+
+            // Initialize camera
+            initializeCamera();
+        }
+
+        // Update version
+        console.log('Camera App v1.6.5');
     </script>
 </body>
 </html>

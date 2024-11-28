@@ -284,7 +284,7 @@
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
                     },
-                    audio: false
+                    audio: true  // Enable audio
                 };
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
@@ -312,7 +312,7 @@
                 });
             } catch (err) {
                 console.error('Error accessing camera:', err);
-                showStatus('Unable to access camera. Please check permissions.', 5000);
+                showStatus('Unable to access camera or microphone. Please check permissions.', 5000);
                 throw err;
             }
         }
@@ -429,7 +429,7 @@
             }
         });
 
-        // Update the record button handler to use the current stream
+        // Update the record button handler
         document.getElementById('recordButton').addEventListener('click', () => {
             const recordBtn = document.getElementById('recordButton');
             const video = document.getElementById('camera');
@@ -446,8 +446,15 @@
                 videoPreview.style.display = 'none';
                 uploadBtn.style.display = 'none';
                 
-                // Start recording with current stream
-                mediaRecorder = new MediaRecorder(video.srcObject);
+                // Start recording with current stream and audio
+                const options = { mimeType: 'video/webm;codecs=vp8,opus' };
+                try {
+                    mediaRecorder = new MediaRecorder(video.srcObject, options);
+                } catch (e) {
+                    console.error('MediaRecorder error:', e);
+                    mediaRecorder = new MediaRecorder(video.srcObject);
+                }
+                
                 mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
                 mediaRecorder.onstop = () => {
                     videoBlob = new Blob(recordedChunks, { type: 'video/webm' });

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.4.6');</script>
+    <script>console.log('Camera App v1.4.7');</script>
     <style>
         * {
             margin: 0;
@@ -1149,7 +1149,7 @@
         // Add iOS detection and explicit login handling
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-        // Create a more iOS-friendly login UI
+        // Create a more iOS-friendly login UI with better touch handling
         function createIOSLoginUI() {
             // Remove any existing login UI
             const existingLogin = document.querySelector('.ios-login-container');
@@ -1170,6 +1170,8 @@
                 align-items: center;
                 justify-content: center;
                 padding: 20px;
+                touch-action: manipulation;
+                -webkit-tap-highlight-color: transparent;
             `;
 
             const content = `
@@ -1194,35 +1196,58 @@
                         line-height: 1.4;
                     ">To enable automatic upload of photos and videos, please sign in with your Google account.</p>
                     
-                    <button id="iosSignInBtn" style="
+                    <a id="iosSignInBtn" href="#" style="
+                        display: block;
                         background: #4285f4;
                         color: white;
+                        text-decoration: none;
                         border: none;
                         padding: 12px 24px;
                         border-radius: 24px;
                         font-size: 16px;
                         font-weight: bold;
                         width: 100%;
+                        box-sizing: border-box;
+                        text-align: center;
+                        -webkit-tap-highlight-color: transparent;
                         cursor: pointer;
-                    ">Sign in with Google</button>
+                        user-select: none;
+                        -webkit-user-select: none;
+                        touch-action: manipulation;
+                    ">Sign in with Google</a>
                 </div>
             `;
 
             loginContainer.innerHTML = content;
             document.body.appendChild(loginContainer);
 
-            // Add click handler
-            document.getElementById('iosSignInBtn').addEventListener('click', () => {
+            // Add touch/click handlers
+            const signInBtn = document.getElementById('iosSignInBtn');
+            
+            // Prevent default behavior
+            signInBtn.addEventListener('touchstart', (e) => {
+                e.preventDefault();
+            }, { passive: false });
+
+            // Handle both click and touch
+            const handleSignIn = (e) => {
+                e.preventDefault();
                 const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
                     `client_id=${YOUR_CLIENT_ID}` +
                     `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
                     `&response_type=token` +
                     `&scope=https://www.googleapis.com/auth/drive.file` +
-                    `&prompt=consent`;  // Force consent screen
+                    `&prompt=consent`;
                 
-                // Direct redirect for iOS
-                window.location.href = authUrl;
-            });
+                // Add visual feedback
+                signInBtn.style.opacity = '0.8';
+                setTimeout(() => {
+                    window.location.href = authUrl;
+                }, 100);
+            };
+
+            signInBtn.addEventListener('click', handleSignIn);
+            signInBtn.addEventListener('touchend', handleSignIn);
         }
 
         // Update upload function for iOS
@@ -1316,7 +1341,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.4.6');
+        console.log('Camera App v1.4.7');
     </script>
 </body>
 </html>

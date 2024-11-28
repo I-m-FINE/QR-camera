@@ -362,16 +362,47 @@
         // Enhanced startCamera function
         async function startCamera(facingMode = 'environment') {
             try {
-                const { hasCamera, hasMicrophone } = await utils.checkDeviceSupport();
-                if (!hasCamera) {
-                    throw new Error('No camera detected');
-                }
-
                 const video = document.getElementById('camera');
                 
                 // Cleanup existing stream
                 if (video.srcObject) {
                     utils.cleanupMediaStream(video.srcObject);
+                }
+
+                // Get video stream
+                const videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                });
+
+                // Get video track for capabilities
+                const videoTrack = videoStream.getVideoTracks()[0];
+                const capabilities = videoTrack.getCapabilities();
+                
+                // Check and handle orientation
+                if (facingMode === 'user') {
+                    // For front camera
+                    if (screen.orientation.type.includes('landscape')) {
+                        // In landscape mode
+                        if (capabilities.facingMode.includes('user')) {
+                            video.style.transform = 'scale(-1, 1) rotate(180deg)';
+                        } else {
+                            video.style.transform = 'scale(-1, 1)';
+                        }
+                    } else {
+                        // In portrait mode
+                        video.style.transform = 'scale(-1, 1)';
+                    }
+                } else {
+                    // For back camera
+                    if (screen.orientation.type.includes('landscape')) {
+                        video.style.transform = 'rotate(0deg)';
+                    } else {
+                        video.style.transform = 'rotate(0deg)';
+                    }
                 }
 
                 // Always mute preview
@@ -396,15 +427,6 @@
                     }
                 }
 
-                // Get video stream
-                const videoStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: facingMode,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                });
-
                 // Combine streams
                 const tracks = [...videoStream.getTracks()];
                 if (audioStream) {
@@ -427,6 +449,13 @@
                     await fullscreenUtils.enterFullscreen();
                 }
 
+                // Add orientation change listener
+                window.addEventListener('orientationchange', () => {
+                    setTimeout(() => {
+                        updateVideoOrientation(video, facingMode);
+                    }, 100);
+                });
+
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play()
@@ -440,6 +469,19 @@
             } catch (err) {
                 utils.handleError(err, 'Error accessing media devices');
                 throw err;
+            }
+        }
+
+        // Function to update video orientation
+        function updateVideoOrientation(video, facingMode) {
+            if (facingMode === 'user') {
+                if (screen.orientation.type.includes('landscape')) {
+                    video.style.transform = 'scale(-1, 1) rotate(180deg)';
+                } else {
+                    video.style.transform = 'scale(-1, 1)';
+                }
+            } else {
+                video.style.transform = 'rotate(0deg)';
             }
         }
 
@@ -562,22 +604,17 @@
 
         // Add switch camera button handler
         document.getElementById('switchCamera').addEventListener('click', async () => {
-            // Toggle between front and back camera
             const newMode = currentFacingMode === 'environment' ? 'user' : 'environment';
             
-            // Stop recording if active
-            if (mediaRecorder && mediaRecorder.state === 'recording') {
-                mediaRecorder.stop();
-                const recordBtn = document.getElementById('recordButton');
-                recordBtn.textContent = 'Record Video';
-                recordBtn.classList.remove('recording');
-            }
-
             try {
                 await startCamera(newMode);
+                
+                // Update orientation immediately after switch
+                const video = document.getElementById('camera');
+                updateVideoOrientation(video, newMode);
+                
             } catch (error) {
-                console.error('Error switching camera:', error);
-                alert('Failed to switch camera. Your device might only have one camera.');
+                utils.handleError(error, 'Error switching camera');
             }
         });
 
@@ -779,6 +816,15 @@
 
         // Add the button to your button container
         document.querySelector('.button-container').appendChild(toggleFullscreenButton);
+
+        // Add CSS for smooth transitions
+        const style = document.createElement('style');
+        style.textContent = `
+            #camera {
+                transition: transform 0.3s ease-out;
+            }
+        `;
+        document.head.appendChild(style);
     </script>
 </body>
 </html>

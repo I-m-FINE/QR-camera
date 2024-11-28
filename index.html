@@ -259,6 +259,7 @@
     <div class="status-message" id="statusMessage"></div>
     <canvas id="canvas" style="display:none;"></canvas>
 
+    <script src="drive-upload.js"></script>
     <script>
         let imageBlob = null;
         let videoBlob = null;
@@ -466,6 +467,11 @@
         });
 
         document.getElementById('upload').addEventListener('click', async () => {
+            if (typeof uploadToDrive === 'undefined') {
+                showStatus('Upload functionality not ready. Please try again.', 5000);
+                return;
+            }
+            
             if (imageBlob || videoBlob) {
                 const uploadBtn = document.getElementById('upload');
                 uploadBtn.disabled = true;
@@ -547,6 +553,5 @@
             document.getElementById('zoomSlider').value = zoomLevel;
         }
     </script>
-    <script src="drive-upload.js"></script>
 </body>
 </html>

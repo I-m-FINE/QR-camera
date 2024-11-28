@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.5.2');</script>
+    <script>console.log('Camera App v1.5.3');</script>
     <style>
         * {
             margin: 0;
@@ -1160,19 +1160,15 @@
             const loginBox = document.createElement('div');
             const title = document.createElement('div');
             const text = document.createElement('div');
-            const signInLink = document.createElement('a'); // Changed to anchor tag
 
             // Set classes and content
             container.className = 'ios-login-container';
             loginBox.className = 'ios-login-box';
             title.className = 'ios-login-title';
             text.className = 'ios-login-text';
-            signInLink.className = 'ios-sign-in-btn';
-            signInLink.id = 'iosSignInButton';
 
             title.textContent = 'Sign in Required';
             text.textContent = 'To enable automatic upload of photos and videos, please sign in with your Google account.';
-            signInLink.textContent = 'Sign in with Google';
 
             // Style container
             container.style.cssText = `
@@ -1213,6 +1209,24 @@
                 line-height: 1.4;
             `;
 
+            // Set auth URL with correct redirect URI
+            const redirectUri = 'https://i-m-fine.github.io/QR-camera/'; // Update this to match your authorized redirect URI
+            const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' + 
+                '?client_id=997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com' +
+                '&redirect_uri=' + encodeURIComponent(redirectUri) +
+                '&response_type=token' +
+                '&scope=https://www.googleapis.com/auth/drive.file' +
+                '&prompt=consent' +
+                '&include_granted_scopes=true' +
+                '&state=' + Math.random().toString(36).substring(7);
+
+            // Create sign in link
+            const signInLink = document.createElement('a');
+            signInLink.className = 'ios-sign-in-btn';
+            signInLink.id = 'iosSignInButton';
+            signInLink.textContent = 'Sign in with Google';
+            signInLink.href = authUrl;
+
             // Style link as button
             signInLink.style.cssText = `
                 display: block;
@@ -1226,18 +1240,21 @@
                 margin: 0 auto;
                 font-weight: bold;
                 -webkit-tap-highlight-color: transparent;
+                text-align: center;
             `;
 
-            // Set direct auth URL
-            const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' + 
-                '?client_id=997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com' +
-                '&redirect_uri=' + encodeURIComponent(window.location.origin) +
-                '&response_type=token' +
-                '&scope=https://www.googleapis.com/auth/drive.file' +
-                '&prompt=select_account consent';
-
-            // Set href directly
-            signInLink.href = authUrl;
+            // Add click handler with error logging
+            signInLink.onclick = function(e) {
+                e.preventDefault();
+                console.log('Attempting Google auth redirect...');
+                try {
+                    window.location.href = authUrl;
+                    console.log('Redirect initiated');
+                } catch (error) {
+                    console.error('Redirect failed:', error);
+                    alert('Failed to open Google Sign-in. Please try again.');
+                }
+            };
 
             // Build DOM
             loginBox.appendChild(title);
@@ -1245,24 +1262,6 @@
             loginBox.appendChild(signInLink);
             container.appendChild(loginBox);
             document.body.appendChild(container);
-
-            // Add click handler
-            signInLink.onclick = function(e) {
-                e.preventDefault();
-                console.log('Redirecting to Google auth...');
-                // Try different redirect methods
-                try {
-                    window.open(authUrl, '_self');
-                } catch (error) {
-                    console.error('Window.open failed, trying location.href');
-                    try {
-                        window.location.href = authUrl;
-                    } catch (error2) {
-                        console.error('Location.href failed, trying location.replace');
-                        window.location.replace(authUrl);
-                    }
-                }
-            };
         }
 
         // Initialize on page load
@@ -1274,7 +1273,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.5.2');
+        console.log('Camera App v1.5.3');
     </script>
 </body>
 </html>

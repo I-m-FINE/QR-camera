@@ -413,7 +413,6 @@
             try {
                 const video = document.getElementById('camera');
                 
-                // Cleanup existing stream
                 if (video.srcObject) {
                     utils.cleanupMediaStream(video.srcObject);
                 }
@@ -430,55 +429,10 @@
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
-                // Enhanced orientation handling
-                function updateOrientation() {
-                    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-                    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                    const isAndroid = /Android/.test(navigator.userAgent);
-
-                    // Reset transform
-                    video.style.transform = '';
-
-                    if (facingMode === 'user') {
-                        if (isLandscape) {
-                            if (isAndroid) {
-                                // Android front camera landscape fix
-                                video.style.transform = window.orientation === 90 
-                                    ? 'scale(-1, 1) rotate(180deg)'
-                                    : 'scale(-1, 1) rotate(180deg)';
-                            } else if (isIOS) {
-                                // iOS front camera landscape fix
-                                video.style.transform = 'scale(-1, 1) rotate(180deg)';
-                            } else {
-                                // Default landscape front camera
-                                video.style.transform = 'scale(-1, 1)';
-                            }
-                        } else {
-                            // Portrait mode front camera
-                            video.style.transform = 'scale(-1, 1)';
-                        }
-                    } else {
-                        // Back camera
-                        if (isLandscape) {
-                            video.style.transform = 'rotate(0deg)';
-                        } else {
-                            video.style.transform = 'rotate(0deg)';
-                        }
-                    }
-
-                    // Log current orientation state for debugging
-                    console.log('Camera Orientation:', {
-                        facingMode,
-                        isLandscape,
-                        isIOS,
-                        isAndroid,
-                        orientation: window.orientation,
-                        transform: video.style.transform
-                    });
-                }
-
-                // Update orientation immediately and on changes
+                // Initial orientation update
                 updateOrientation();
+
+                // Listen for orientation changes
                 window.addEventListener('orientationchange', () => {
                     setTimeout(updateOrientation, 100);
                 });
@@ -848,6 +802,43 @@
                 <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
             `;
             document.querySelector('.camera-container').appendChild(zoomControls);
+        }
+
+        // Enhanced orientation handling
+        function updateOrientation() {
+            const video = document.getElementById('camera');
+            const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+            const isAndroid = /Android/.test(navigator.userAgent);
+            
+            if (currentFacingMode === 'user') {
+                if (isLandscape) {
+                    if (isAndroid) {
+                        // Fix for Android front camera in landscape
+                        if (window.orientation === 90) {
+                            video.style.transform = 'scale(-1, 1) rotate(270deg)';
+                        } else if (window.orientation === -90) {
+                            video.style.transform = 'scale(-1, 1) rotate(90deg)';
+                        }
+                    } else {
+                        // For other devices in landscape
+                        video.style.transform = 'scale(-1, 1) rotate(90deg)';
+                    }
+                } else {
+                    // Portrait mode - just mirror
+                    video.style.transform = 'scale(-1, 1)';
+                }
+            } else {
+                // Back camera
+                video.style.transform = 'none';
+            }
+
+            console.log('Orientation Updated:', {
+                facingMode: currentFacingMode,
+                isLandscape,
+                isAndroid,
+                orientation: window.orientation,
+                transform: video.style.transform
+            });
         }
     </script>
 </body>

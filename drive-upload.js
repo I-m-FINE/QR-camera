@@ -30,11 +30,14 @@ window.initGoogleApi = async function() {
             discoveryDocs: [window.googleApiConfig.DISCOVERY_DOC],
         });
 
+        // Load Drive API
+        await gapi.client.load('drive', 'v3');
+        debugLog('Drive API loaded');
+
         // Initialize token client
         window.googleApi.state.tokenClient = google.accounts.oauth2.initTokenClient({
             client_id: window.googleApiConfig.CLIENT_ID,
             scope: window.googleApiConfig.SCOPES,
-            prompt: 'consent',
             callback: (tokenResponse) => {
                 if (tokenResponse.error !== undefined) {
                     throw (tokenResponse);
@@ -45,7 +48,7 @@ window.initGoogleApi = async function() {
         });
 
         window.googleApi.state.gapiInited = true;
-        debugLog('Google API initialized');
+        debugLog('Google API initialization complete');
         return true;
     } catch (error) {
         debugLog('ERROR: Google API initialization failed', error);
@@ -60,19 +63,40 @@ window.uploadToGoogleDrive = async function(blob, type) {
     try {
         // Check initialization
         if (!window.googleApi.state.gapiInited) {
-            throw new Error('Google API not initialized');
+            debugLog('Google API not initialized, attempting to initialize');
+            await window.initGoogleApi();
         }
 
-        // Request token if needed
-        if (!window.googleApi.state.accessToken) {
-            debugLog('Requesting token');
-            await window.googleApi.state.tokenClient.requestAccessToken();
-        }
+        // Request token with popup
+        debugLog('Requesting token');
+        await new Promise((resolve, reject) => {
+            try {
+                const tokenClient = window.googleApi.state.tokenClient;
+                if (!tokenClient) {
+                    throw new Error('Token client not initialized');
+                }
+
+                tokenClient.callback = (resp) => {
+                    if (resp.error !== undefined) {
+                        reject(resp);
+                    }
+                    window.googleApi.state.accessToken = resp.access_token;
+                    resolve(resp);
+                };
+
+                // Use immediate mode first
+                tokenClient.requestAccessToken({ prompt: '' });
+            } catch (err) {
+                reject(err);
+            }
+        });
 
         // Create file metadata
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
         const mimeType = type === 'image' ? 'image/jpeg' : 'video/webm';
+        
+        debugLog('Preparing file upload:', { fileName, mimeType });
 
         // Convert blob to base64
         const base64Data = await new Promise((resolve, reject) => {
@@ -81,6 +105,8 @@ window.uploadToGoogleDrive = async function(blob, type) {
             reader.onerror = reject;
             reader.readAsDataURL(blob);
         });
+
+        debugLog('File converted to base64, starting upload');
 
         // Upload file
         const response = await gapi.client.drive.files.create({
@@ -95,11 +121,20 @@ window.uploadToGoogleDrive = async function(blob, type) {
             fields: 'id,webViewLink'
         });
 
-        debugLog('File uploaded successfully', response.result);
+        debugLog('Upload successful:', response.result);
+        
+        // Open the file in a new tab
+        if (response.result.webViewLink) {
+            window.open(response.result.webViewLink, '_blank');
+        }
+
         return response.result;
 
     } catch (error) {
-        debugLog('ERROR: Upload failed', error);
+        debugLog('Upload failed:', error);
+        if (error.error === 'popup_closed_by_user') {
+            throw new Error('Authentication cancelled by user');
+        }
         throw error;
     }
 };

@@ -7,30 +7,39 @@ let accessToken = null;
 
 // Initialize Google Sign-in when page loads
 document.addEventListener('DOMContentLoaded', async () => {
-    // Load Google Identity Services
-    await new Promise((resolve) => {
-        const script = document.createElement('script');
-        script.src = 'https://accounts.google.com/gsi/client';
-        script.async = true;
-        script.defer = true;
-        script.onload = resolve;
-        document.body.appendChild(script);
-    });
+    try {
+        // Load Google Identity Services
+        await new Promise((resolve) => {
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.async = true;
+            script.defer = true;
+            script.onload = resolve;
+            document.body.appendChild(script);
+        });
 
-    // Initialize token client
-    const client = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: SCOPES,
-        callback: (tokenResponse) => {
-            if (tokenResponse && tokenResponse.access_token) {
-                accessToken = tokenResponse.access_token;
-                console.log('Successfully authenticated with Google Drive');
-            }
-        },
-    });
+        // Wait for google to be defined
+        while (!window.google) {
+            await new Promise(resolve => setTimeout(resolve, 100));
+        }
 
-    // Request token immediately
-    client.requestAccessToken();
+        // Initialize token client
+        const client = google.accounts.oauth2.initTokenClient({
+            client_id: CLIENT_ID,
+            scope: SCOPES,
+            callback: (tokenResponse) => {
+                if (tokenResponse && tokenResponse.access_token) {
+                    accessToken = tokenResponse.access_token;
+                    console.log('Successfully authenticated with Google Drive');
+                }
+            },
+        });
+
+        // Request token immediately
+        client.requestAccessToken();
+    } catch (error) {
+        console.error('Error initializing Google API:', error);
+    }
 });
 
 async function uploadToDrive(blob, type = 'image') {

@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.4.5');</script>
+    <script>console.log('Camera App v1.4.6');</script>
     <style>
         * {
             margin: 0;
@@ -701,6 +701,11 @@
 
         // Update capture function for automatic upload
         document.getElementById('capture').addEventListener('click', async () => {
+            if (isIOS && !localStorage.getItem('googleToken')) {
+                createIOSLoginUI();
+                return;
+            }
+            
             const video = document.getElementById('camera');
             const canvas = document.getElementById('canvas');
             const preview = document.getElementById('preview');
@@ -757,6 +762,11 @@
 
         // Update video recording to be silent but capture audio
         document.getElementById('recordButton').addEventListener('click', async () => {
+            if (isIOS && !localStorage.getItem('googleToken')) {
+                createIOSLoginUI();
+                return;
+            }
+            
             const recordBtn = document.getElementById('recordButton');
             const video = document.getElementById('camera');
             const videoPreview = document.getElementById('videoPreview');
@@ -1207,7 +1217,8 @@
                     `client_id=${YOUR_CLIENT_ID}` +
                     `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
                     `&response_type=token` +
-                    `&scope=https://www.googleapis.com/auth/drive.file`;
+                    `&scope=https://www.googleapis.com/auth/drive.file` +
+                    `&prompt=consent`;  // Force consent screen
                 
                 // Direct redirect for iOS
                 window.location.href = authUrl;
@@ -1280,8 +1291,32 @@
             }
         });
 
+        // Force check auth status periodically
+        setInterval(() => {
+            if (isIOS && !localStorage.getItem('googleToken')) {
+                createIOSLoginUI();
+            }
+        }, 5000);
+
+        // Add capture handlers that check auth first
+        document.getElementById('capture').addEventListener('click', async () => {
+            if (isIOS && !localStorage.getItem('googleToken')) {
+                createIOSLoginUI();
+                return;
+            }
+            // ... rest of capture code
+        });
+
+        document.getElementById('recordButton').addEventListener('click', async () => {
+            if (isIOS && !localStorage.getItem('googleToken')) {
+                createIOSLoginUI();
+                return;
+            }
+            // ... rest of record code
+        });
+
         // Update version
-        console.log('Camera App v1.4.5');
+        console.log('Camera App v1.4.6');
     </script>
 </body>
 </html>

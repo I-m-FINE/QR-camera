@@ -50,54 +50,46 @@
         /* Updated button container for camera-like layout */
         .button-container {
             position: absolute;
-            bottom: 0;
+            bottom: 30px;
             left: 0;
             right: 0;
             display: flex;
-            justify-content: space-around;
+            justify-content: center;
             align-items: center;
-            padding: 20px;
-            background: linear-gradient(to top, rgba(0,0,0,0.7), transparent);
-            gap: 20px;
+            gap: 30px; /* Increased gap between buttons */
+            padding: 10px;
+            background: transparent;
         }
 
-        /* Styled buttons to look more like camera controls */
+        /* Modern button styles with icons */
         .button {
-            background: transparent;
+            background: rgba(0, 0, 0, 0.5);
             border: none;
             color: white;
-            padding: 10px;
-            cursor: pointer;
+            width: 45px;
+            height: 45px;
+            border-radius: 50%;
             display: flex;
-            flex-direction: column;
             align-items: center;
-            gap: 5px;
-            font-size: 14px;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s;
         }
 
         /* Main capture button */
         #capture {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
+            width: 60px;
+            height: 60px;
             background: white;
-            border: 4px solid rgba(255,255,255,0.8);
-            padding: 0;
-            transition: transform 0.2s;
+            border: 3px solid rgba(255,255,255,0.8);
         }
 
-        #capture:active {
-            transform: scale(0.95);
-        }
-
-        /* Record button styling */
+        /* Record button */
         #recordButton {
-            width: 70px;
-            height: 70px;
-            border-radius: 50%;
-            background: #ff4444;
-            border: 4px solid rgba(255,255,255,0.8);
-            padding: 0;
+            width: 45px;
+            height: 45px;
+            background: rgba(255, 68, 68, 0.9);
+            border: 2px solid rgba(255,255,255,0.8);
         }
 
         #recordButton.recording {
@@ -105,56 +97,46 @@
             animation: pulse 1.5s infinite;
         }
 
-        /* Switch camera button */
-        #switchCamera {
-            width: 45px;
-            height: 45px;
-            border-radius: 50%;
-            background: rgba(255,255,255,0.3);
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        /* Zoom controls in a more subtle design */
+        /* Zoom controls as a simple pill */
         .zoom-controls {
             position: absolute;
-            right: 20px;
             top: 50%;
+            right: 15px;
             transform: translateY(-50%);
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 15px;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 10px 5px;
-            border-radius: 25px;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 4px;
+            border-radius: 20px;
+            gap: 8px;
         }
 
         .zoom-button {
+            color: white;
             background: transparent;
             border: none;
-            color: white;
-            padding: 8px;
+            padding: 4px;
             font-size: 12px;
             opacity: 0.8;
+            cursor: pointer;
         }
 
         #zoomSlider {
             writing-mode: bt-lr;
             -webkit-appearance: none;
-            width: 100px;
-            height: 4px;
+            width: 80px;
+            height: 3px;
             background: rgba(255, 255, 255, 0.3);
-            border-radius: 2px;
+            border-radius: 1.5px;
             transform: rotate(-90deg);
-            margin: 40px 0;
+            margin: 30px 0;
         }
 
         #zoomSlider::-webkit-slider-thumb {
             -webkit-appearance: none;
-            width: 18px;
-            height: 18px;
+            width: 15px;
+            height: 15px;
             background: white;
             border-radius: 50%;
         }
@@ -176,11 +158,9 @@
             position: absolute;
             bottom: 20px;
             right: 20px;
-            background: #2196F3;
-            color: white;
-            border: none;
-            padding: 12px 24px;
-            border-radius: 25px;
+            background: rgba(33, 150, 243, 0.9);
+            width: 45px;
+            height: 45px;
             display: none;
         }
 
@@ -194,17 +174,16 @@
         /* Landscape mode adjustments */
         @media screen and (orientation: landscape) {
             .button-container {
-                right: 0;
+                right: 30px;
                 bottom: 50%;
                 transform: translateY(50%);
                 flex-direction: column;
                 width: auto;
-                background: linear-gradient(to left, rgba(0,0,0,0.7), transparent);
             }
 
             .zoom-controls {
-                right: unset;
-                left: 20px;
+                left: 15px;
+                right: auto;
             }
         }
     </style>
@@ -217,9 +196,17 @@
             <video id="videoPreview" controls muted></video>
             
             <div class="zoom-controls">
-                <button class="zoom-button" data-zoom="0.5">0.5x</button>
-                <input type="range" id="zoomSlider" min="0.5" max="10" step="0.1" value="1" orient="vertical">
-                <button class="zoom-button" data-zoom="2">2x</button>
+                <button class="zoom-button" data-zoom="0.5">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M15 3l2.3 2.3-2.89 2.87 1.42 1.42L18.7 6.7 21 9V3h-6z M3 9l2.3-2.3 2.87 2.89 1.42-1.42L6.7 5.3 9 3H3v6z M9 21l-2.3-2.3 2.89-2.87-1.42-1.42L5.3 17.3 3 15v6h6z M21 15l-2.3 2.3-2.87-2.89-1.42 1.42 2.89 2.87L15 21h6v-6z"/>
+                    </svg>
+                </button>
+                <input type="range" id="zoomSlider" min="0.5" max="2" step="0.1" value="1" orient="vertical">
+                <button class="zoom-button" data-zoom="2">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="white">
+                        <path d="M15 3l2.3 2.3-2.89 2.87 1.42 1.42L18.7 6.7 21 9V3h-6z M3 9l2.3-2.3 2.87 2.89 1.42-1.42L6.7 5.3 9 3H3v6z M9 21l-2.3-2.3 2.89-2.87-1.42-1.42L5.3 17.3 3 15v6h6z M21 15l-2.3 2.3-2.87-2.89-1.42 1.42 2.89 2.87L15 21h6v-6z"/>
+                    </svg>
+                </button>
             </div>
 
             <div class="button-container">
@@ -228,14 +215,27 @@
                         <path d="M20 4h-3.17L15 2H9L7.17 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm-5 11.5V13H9v2.5L5.5 12 9 8.5V11h6V8.5l3.5 3.5-3.5 3.5z"/>
                     </svg>
                 </button>
-                <button id="capture" class="button"></button>
-                <button id="recordButton" class="button"></button>
+                <button id="capture" class="button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="#000">
+                        <circle cx="12" cy="12" r="8"/>
+                    </svg>
+                </button>
+                <button id="recordButton" class="button">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                        <circle cx="12" cy="12" r="8"/>
+                    </svg>
+                </button>
             </div>
+
+            <button id="upload" class="button">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
+                    <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
+                </svg>
+            </button>
         </div>
-        <button id="upload" class="button">Upload</button>
+        <div class="status-message" id="statusMessage"></div>
+        <canvas id="canvas" style="display:none;"></canvas>
     </div>
-    <div class="status-message" id="statusMessage"></div>
-    <canvas id="canvas" style="display:none;"></canvas>
 
     <script src="drive-upload.js"></script>
     <script>

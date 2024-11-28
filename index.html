@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.4.4');</script>
+    <script>console.log('Camera App v1.4.5');</script>
     <style>
         * {
             margin: 0;
@@ -1139,94 +1139,87 @@
         // Add iOS detection and explicit login handling
         const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-        // Add login prompt for iOS
-        function createLoginPrompt() {
+        // Create a more iOS-friendly login UI
+        function createIOSLoginUI() {
+            // Remove any existing login UI
+            const existingLogin = document.querySelector('.ios-login-container');
+            if (existingLogin) existingLogin.remove();
+
             const loginContainer = document.createElement('div');
+            loginContainer.className = 'ios-login-container';
             loginContainer.style.cssText = `
                 position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
                 background: rgba(0, 0, 0, 0.9);
-                padding: 20px;
-                border-radius: 12px;
                 z-index: 9999;
-                text-align: center;
-                width: 80%;
-                max-width: 300px;
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                justify-content: center;
+                padding: 20px;
             `;
 
-            const loginButton = document.createElement('button');
-            loginButton.textContent = 'Sign in with Google';
-            loginButton.style.cssText = `
-                background: #4285f4;
-                color: white;
-                border: none;
-                padding: 12px 24px;
-                border-radius: 24px;
-                font-size: 16px;
-                font-weight: bold;
-                margin-top: 10px;
-                width: 100%;
+            const content = `
+                <div style="
+                    background: #fff;
+                    padding: 20px;
+                    border-radius: 12px;
+                    width: 90%;
+                    max-width: 320px;
+                    text-align: center;
+                ">
+                    <h2 style="
+                        margin: 0 0 15px 0;
+                        color: #333;
+                        font-size: 18px;
+                    ">Sign in Required</h2>
+                    
+                    <p style="
+                        color: #666;
+                        margin: 0 0 20px 0;
+                        font-size: 14px;
+                        line-height: 1.4;
+                    ">To enable automatic upload of photos and videos, please sign in with your Google account.</p>
+                    
+                    <button id="iosSignInBtn" style="
+                        background: #4285f4;
+                        color: white;
+                        border: none;
+                        padding: 12px 24px;
+                        border-radius: 24px;
+                        font-size: 16px;
+                        font-weight: bold;
+                        width: 100%;
+                        cursor: pointer;
+                    ">Sign in with Google</button>
+                </div>
             `;
 
-            const message = document.createElement('div');
-            message.textContent = 'Please sign in to enable auto-upload';
-            message.style.cssText = `
-                color: white;
-                margin-bottom: 15px;
-                font-size: 14px;
-            `;
-
-            loginContainer.appendChild(message);
-            loginContainer.appendChild(loginButton);
+            loginContainer.innerHTML = content;
             document.body.appendChild(loginContainer);
 
-            return loginButton;
+            // Add click handler
+            document.getElementById('iosSignInBtn').addEventListener('click', () => {
+                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
+                    `client_id=${YOUR_CLIENT_ID}` +
+                    `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
+                    `&response_type=token` +
+                    `&scope=https://www.googleapis.com/auth/drive.file`;
+                
+                // Direct redirect for iOS
+                window.location.href = authUrl;
+            });
         }
 
-        // Update Google Sign-in handling for iOS
-        async function initGoogleAuth() {
-            try {
-                if (isIOS) {
-                    if (!localStorage.getItem('googleToken')) {
-                        const loginButton = createLoginPrompt();
-                        loginButton.addEventListener('click', () => {
-                            // Use redirect auth for iOS
-                            const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-                                `client_id=${YOUR_CLIENT_ID}` +
-                                `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
-                                `&response_type=token` +
-                                `&scope=https://www.googleapis.com/auth/drive.file`;
-                            
-                            // Redirect to Google auth
-                            window.location.href = authUrl;
-                        });
-                    }
-                    
-                    // Check if we're returning from auth
-                    if (window.location.hash.includes('access_token')) {
-                        const token = new URLSearchParams(window.location.hash.substr(1)).get('access_token');
-                        localStorage.setItem('googleToken', token);
-                        showStatus('Successfully signed in!', 2000);
-                        // Remove login prompt if it exists
-                        const loginPrompt = document.querySelector('.login-prompt');
-                        if (loginPrompt) loginPrompt.remove();
-                    }
-                }
-            } catch (error) {
-                console.error('Auth initialization failed:', error);
-                showStatus('Sign-in failed. Please try again.', 2000);
-            }
-        }
-
-        // Update upload function with better iOS handling
+        // Update upload function for iOS
         async function uploadToDrive(blob, type) {
             try {
                 const token = localStorage.getItem('googleToken');
                 if (!token && isIOS) {
-                    showStatus('Please sign in first');
-                    await initGoogleAuth();
+                    createIOSLoginUI();
                     return;
                 }
 
@@ -1260,8 +1253,7 @@
                 
                 if (error.message.includes('401') && isIOS) {
                     localStorage.removeItem('googleToken');
-                    showStatus('Session expired. Please sign in again.');
-                    await initGoogleAuth();
+                    createIOSLoginUI();
                 } else {
                     showStatus('Upload failed. Retrying...', 2000);
                     setTimeout(() => uploadToDrive(blob, type), 3000);
@@ -1269,15 +1261,27 @@
             }
         }
 
-        // Initialize auth check on page load
+        // Check auth status on page load
         document.addEventListener('DOMContentLoaded', () => {
-            if (isIOS && !localStorage.getItem('googleToken')) {
-                setTimeout(() => initGoogleAuth(), 1000);
+            if (isIOS) {
+                // Check for auth callback
+                if (window.location.hash.includes('access_token')) {
+                    const token = new URLSearchParams(window.location.hash.substr(1)).get('access_token');
+                    localStorage.setItem('googleToken', token);
+                    showStatus('Successfully signed in!', 2000);
+                    // Remove any login UI
+                    const loginUI = document.querySelector('.ios-login-container');
+                    if (loginUI) loginUI.remove();
+                } 
+                // Show login if no token
+                else if (!localStorage.getItem('googleToken')) {
+                    createIOSLoginUI();
+                }
             }
         });
 
         // Update version
-        console.log('Camera App v1.4.4');
+        console.log('Camera App v1.4.5');
     </script>
 </body>
 </html>

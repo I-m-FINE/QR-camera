@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.9');</script>
+    <script>console.log('Camera App v1.4.0');</script>
     <style>
         * {
             margin: 0;
@@ -333,12 +333,6 @@
                     </svg>
                 </button>
             </div>
-
-            <button id="upload" class="button">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                    <path d="M9 16h6v-6h4l-7-7-7 7h4v6zm-4 2h14v2H5v-2z"/>
-                </svg>
-            </button>
         </div>
         <div class="status-message" id="statusMessage"></div>
         <canvas id="canvas" style="display:none;"></canvas>
@@ -705,18 +699,11 @@
             }
         });
 
-        // Update capture function for better iOS compatibility
+        // Update capture function for automatic upload
         document.getElementById('capture').addEventListener('click', async () => {
             const video = document.getElementById('camera');
             const canvas = document.getElementById('canvas');
             const preview = document.getElementById('preview');
-            const videoPreview = document.getElementById('videoPreview');
-            const uploadBtn = document.getElementById('upload');
-
-            // Clear previous recording/capture
-            videoBlob = null;
-            recordedChunks = [];
-            videoPreview.style.display = 'none';
 
             // Ensure video is playing before capture
             if (video.paused) {
@@ -731,14 +718,115 @@
             // Draw video frame to canvas
             canvas.getContext('2d').drawImage(video, 0, 0);
 
-            // Convert canvas to blob with proper orientation
-            canvas.toBlob((blob) => {
-                imageBlob = blob;
+            try {
+                // Convert canvas to blob and upload immediately
+                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg', 0.8));
+                
+                // Show brief preview
                 preview.src = URL.createObjectURL(blob);
                 preview.style.display = 'block';
-                uploadBtn.style.display = 'inline-block';
-            }, 'image/jpeg', 0.8);
+                
+                // Show upload status
+                showStatus('Uploading image...');
+                
+                // Upload to drive
+                await uploadToDrive(blob, 'image');
+                showStatus('Upload complete!', 2000);
+                
+                // Hide preview after upload
+                setTimeout(() => {
+                    preview.style.display = 'none';
+                    preview.src = '';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Upload failed:', error);
+                showStatus('Upload failed. Retrying...', 2000);
+                
+                // Retry once
+                setTimeout(async () => {
+                    try {
+                        await uploadToDrive(blob, 'image');
+                        showStatus('Upload complete!', 2000);
+                    } catch (retryError) {
+                        showStatus('Upload failed', 2000);
+                    }
+                }, 3000);
+            }
         });
+
+        // Update record button for automatic upload
+        document.getElementById('recordButton').addEventListener('click', () => {
+            const recordBtn = document.getElementById('recordButton');
+            const video = document.getElementById('camera');
+            const videoPreview = document.getElementById('videoPreview');
+            
+            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                // Start new recording
+                recordedChunks = [];
+                mediaRecorder = new MediaRecorder(video.srcObject, {
+                    mimeType: 'video/webm;codecs=vp8,opus'
+                });
+                
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) recordedChunks.push(e.data);
+                };
+                
+                mediaRecorder.onstop = async () => {
+                    try {
+                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        
+                        // Show preview while uploading
+                        videoPreview.src = URL.createObjectURL(blob);
+                        videoPreview.style.display = 'block';
+                        videoPreview.muted = true;
+                        
+                        // Upload automatically
+                        showStatus('Uploading video...');
+                        await uploadToDrive(blob, 'video');
+                        showStatus('Upload complete!', 2000);
+                        
+                        // Hide preview after upload
+                        setTimeout(() => {
+                            videoPreview.style.display = 'none';
+                            videoPreview.src = '';
+                        }, 2000);
+                        
+                    } catch (error) {
+                        console.error('Video upload failed:', error);
+                        showStatus('Upload failed. Retrying...', 2000);
+                        
+                        // Retry once
+                        setTimeout(async () => {
+                            try {
+                                await uploadToDrive(blob, 'video');
+                                showStatus('Upload complete!', 2000);
+                            } catch (retryError) {
+                                showStatus('Upload failed', 2000);
+                            }
+                        }, 3000);
+                    }
+                };
+                
+                mediaRecorder.start(1000);
+                recordBtn.textContent = 'Stop Recording';
+                recordBtn.classList.add('recording');
+                showStatus('Recording started');
+                
+            } else {
+                // Stop recording and trigger upload
+                mediaRecorder.stop();
+                recordBtn.textContent = 'Record Video';
+                recordBtn.classList.remove('recording');
+                showStatus('Recording stopped');
+            }
+        });
+
+        // Remove upload button from DOM
+        const uploadButton = document.getElementById('upload');
+        if (uploadButton) {
+            uploadButton.remove();
+        }
 
         // Add switch camera button handler
         document.getElementById('switchCamera').addEventListener('click', async () => {
@@ -758,150 +846,6 @@
             } catch (error) {
                 console.error('Error switching camera:', error);
                 alert('Failed to switch camera. Your device might only have one camera.');
-            }
-        });
-
-        // Update the record button handler
-        document.getElementById('recordButton').addEventListener('click', () => {
-            const recordBtn = document.getElementById('recordButton');
-            const video = document.getElementById('camera');
-            const uploadBtn = document.getElementById('upload');
-            const preview = document.getElementById('preview');
-            const videoPreview = document.getElementById('videoPreview');
-            
-            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                // Verify we have both audio and video tracks
-                const stream = video.srcObject;
-                const hasAudio = stream.getAudioTracks().length > 0;
-                const hasVideo = stream.getVideoTracks().length > 0;
-                
-                console.log('Starting recording with:', {
-                    audioTracks: stream.getAudioTracks().length,
-                    videoTracks: stream.getVideoTracks().length
-                });
-
-                // Clear previous recording
-                videoBlob = null;
-                imageBlob = null;
-                recordedChunks = [];
-                preview.style.display = 'none';
-                videoPreview.style.display = 'none';
-                uploadBtn.style.display = 'none';
-                
-                // Try different MIME types for better compatibility
-                let options;
-                const mimeTypes = [
-                    'video/webm;codecs=vp8,opus',
-                    'video/webm;codecs=vp9,opus',
-                    'video/webm;codecs=h264,opus',
-                    'video/webm'
-                ];
-
-                for (const mimeType of mimeTypes) {
-                    if (MediaRecorder.isTypeSupported(mimeType)) {
-                        options = { mimeType };
-                        console.log('Using MIME type:', mimeType);
-                        break;
-                    }
-                }
-
-                try {
-                    mediaRecorder = new MediaRecorder(stream, options);
-                    console.log('MediaRecorder created with options:', options);
-                } catch (e) {
-                    console.error('MediaRecorder error:', e);
-                    mediaRecorder = new MediaRecorder(stream);
-                }
-                
-                mediaRecorder.ondataavailable = (e) => {
-                    if (e.data.size > 0) {
-                        recordedChunks.push(e.data);
-                        console.log('Recorded chunk size:', e.data.size);
-                    }
-                };
-
-                mediaRecorder.onstop = () => {
-                    videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    const videoPreview = document.getElementById('videoPreview');
-                    videoPreview.src = URL.createObjectURL(videoBlob);
-                    videoPreview.style.display = 'block';
-                    // Ensure preview is muted by default
-                    videoPreview.muted = true;
-                    uploadBtn.style.display = 'inline-block';
-                };
-
-                // Request data more frequently for better reliability
-                mediaRecorder.start(1000); // Get data every second
-                recordBtn.textContent = 'Stop Recording';
-                recordBtn.classList.add('recording');
-            } else {
-                mediaRecorder.stop();
-                recordBtn.textContent = 'Record Video';
-                recordBtn.classList.remove('recording');
-            }
-        });
-
-        // Optimized upload handler
-        document.getElementById('upload').addEventListener('click', async function(e) {
-            e.preventDefault(); // Prevent any default behavior
-            
-            // Provide immediate feedback
-            this.classList.add('clicked');
-            setTimeout(() => this.classList.remove('clicked'), 200);
-
-            if (typeof uploadToDrive === 'undefined') {
-                showStatus('Upload functionality not ready. Please try again.', 5000);
-                return;
-            }
-            
-            if (!imageBlob && !videoBlob) {
-                showStatus('No content to upload', 3000);
-                return;
-            }
-
-            try {
-                this.disabled = true;
-                this.classList.add('loading');
-                showStatus('Starting upload...');
-
-                if (imageBlob) {
-                    await uploadToDrive(imageBlob, 'image');
-                } else if (videoBlob) {
-                    await uploadToDrive(videoBlob, 'video');
-                }
-
-                showStatus('Upload complete!');
-                this.textContent = 'Upload to Drive';
-                this.style.display = 'none';
-                
-                // Clear previews
-                const preview = document.getElementById('preview');
-                const videoPreview = document.getElementById('videoPreview');
-                preview.style.display = 'none';
-                videoPreview.style.display = 'none';
-                preview.src = '';
-                videoPreview.src = '';
-                
-                // Reset blobs
-                imageBlob = null;
-                videoBlob = null;
-                recordedChunks = [];
-                
-                // Restart camera
-                setTimeout(async () => {
-                    try {
-                        await startCamera(currentFacingMode);
-                    } catch (error) {
-                        console.error('Error restarting camera:', error);
-                    }
-                }, 100);
-                
-            } catch (error) {
-                console.error('Upload failed:', error);
-                showStatus('Upload failed. Please try again.', 5000);
-            } finally {
-                this.disabled = false;
-                this.classList.remove('loading');
             }
         });
 
@@ -1175,115 +1119,8 @@
             }
         });
 
-        // Add auto-upload handling to capture and record functions
-        async function handleCapture() {
-            try {
-                // Existing capture code...
-                const blob = await new Promise(resolve => canvas.toBlob(resolve, 'image/jpeg'));
-                
-                // Show preview
-                preview.src = URL.createObjectURL(blob);
-                preview.style.display = 'block';
-                
-                // Auto upload
-                console.log('Auto uploading image...');
-                showStatus('Uploading image...');
-                await uploadToDrive(blob, 'image');
-                showStatus('Upload complete!', 3000);
-                
-                // Reset preview after successful upload
-                setTimeout(() => {
-                    preview.style.display = 'none';
-                    preview.src = '';
-                }, 2000);
-
-            } catch (error) {
-                console.error('Capture/Upload error:', error);
-                showStatus('Upload failed. Retrying...', 2000);
-                // Retry once
-                setTimeout(async () => {
-                    try {
-                        await uploadToDrive(blob, 'image');
-                        showStatus('Upload complete!', 2000);
-                    } catch (retryError) {
-                        showStatus('Upload failed', 2000);
-                    }
-                }, 3000);
-            }
-        }
-
-        // Handle video recording and auto-upload
-        async function handleRecording() {
-            if (!mediaRecorder || mediaRecorder.state === 'inactive') {
-                // Start recording...
-                recordedChunks = [];
-                mediaRecorder = new MediaRecorder(currentStream, {
-                    mimeType: 'video/webm;codecs=vp8,opus'
-                });
-                
-                mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
-                
-                mediaRecorder.onstop = async () => {
-                    try {
-                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                        
-                        // Show preview
-                        videoPreview.src = URL.createObjectURL(blob);
-                        videoPreview.style.display = 'block';
-                        
-                        // Auto upload
-                        console.log('Auto uploading video...');
-                        showStatus('Uploading video...');
-                        await uploadToDrive(blob, 'video');
-                        showStatus('Upload complete!', 3000);
-                        
-                        // Reset preview after successful upload
-                        setTimeout(() => {
-                            videoPreview.style.display = 'none';
-                            videoPreview.src = '';
-                        }, 2000);
-                        
-                    } catch (error) {
-                        console.error('Video Upload error:', error);
-                        showStatus('Upload failed. Retrying...', 2000);
-                        // Retry once
-                        setTimeout(async () => {
-                            try {
-                                await uploadToDrive(blob, 'video');
-                                showStatus('Upload complete!', 2000);
-                            } catch (retryError) {
-                                showStatus('Upload failed', 2000);
-                            }
-                        }, 3000);
-                    }
-                };
-                
-                mediaRecorder.start();
-                recordButton.classList.add('recording');
-                showStatus('Recording started');
-            } else {
-                mediaRecorder.stop();
-                recordButton.classList.remove('recording');
-                showStatus('Recording stopped');
-            }
-        }
-
-        // Status message helper
-        function showStatus(message, duration = 0) {
-            const statusElement = document.getElementById('statusMessage');
-            statusElement.textContent = message;
-            statusElement.style.display = 'block';
-            
-            if (duration > 0) {
-                setTimeout(() => {
-                    statusElement.style.display = 'none';
-                    statusElement.textContent = '';
-                }, duration);
-            }
-        }
-
         // Update version
-        console.log('Camera App v1.3.9');
+        console.log('Camera App v1.4.0');
     </script>
 </body>
 </html>

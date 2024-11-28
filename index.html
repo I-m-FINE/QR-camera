@@ -1055,6 +1055,172 @@
                 }
             }, { passive: false });
         }
+
+        // iOS-specific camera and control fixes
+        const style = document.createElement('style');
+        style.textContent = `
+            /* Base container */
+            .camera-container {
+                width: 100vw;
+                height: 100vh;
+                height: -webkit-fill-available;
+                position: fixed;
+                top: 0;
+                left: 0;
+                background: #000;
+            }
+
+            /* Camera preview */
+            #camera {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+
+            /* iOS specific styles */
+            .ios-device .camera-container {
+                height: -webkit-fill-available;
+            }
+
+            .ios-device .button-container {
+                position: fixed;
+                padding: env(safe-area-inset-top) env(safe-area-inset-right) 
+                        env(safe-area-inset-bottom) env(safe-area-inset-left);
+                z-index: 1000;
+            }
+
+            .ios-device .zoom-controls {
+                position: fixed;
+                z-index: 1000;
+                background: rgba(0, 0, 0, 0.5);
+                padding: 8px 12px;
+                border-radius: 20px;
+            }
+
+            /* Portrait mode */
+            @media screen and (orientation: portrait) {
+                .ios-device .button-container {
+                    bottom: 0;
+                    left: 0;
+                    right: 0;
+                    display: flex;
+                    justify-content: center;
+                    padding-bottom: max(30px, env(safe-area-inset-bottom));
+                }
+
+                .ios-device .zoom-controls {
+                    bottom: 120px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                }
+            }
+
+            /* Landscape mode */
+            @media screen and (orientation: landscape) {
+                .ios-device .button-container {
+                    top: 50%;
+                    right: 0;
+                    transform: translateY(-50%);
+                    display: flex;
+                    flex-direction: column;
+                    padding-right: max(30px, env(safe-area-inset-right));
+                    background: linear-gradient(to left, rgba(0,0,0,0.3), transparent);
+                }
+
+                .ios-device .zoom-controls {
+                    top: 50%;
+                    right: 100px;
+                    transform: translateY(-50%);
+                }
+
+                .ios-device #camera {
+                    width: 100vw;
+                    height: 100vh;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Enhanced camera initialization for iOS
+        async function startCamera(facingMode = 'environment') {
+            try {
+                const video = document.getElementById('camera');
+                
+                // Cleanup existing stream
+                if (video.srcObject) {
+                    video.srcObject.getTracks().forEach(track => track.stop());
+                }
+
+                // iOS specific constraints
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                currentStream = stream;
+                currentFacingMode = facingMode;
+
+                // iOS specific orientation fixes
+                if (isIOS) {
+                    function updateVideoOrientation() {
+                        const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+                        
+                        if (facingMode === 'user') {
+                            if (isLandscape) {
+                                video.style.transform = 'scale(-1, 1) rotate(270deg)';
+                            } else {
+                                video.style.transform = 'scale(-1, 1)';
+                            }
+                        } else {
+                            if (isLandscape) {
+                                video.style.transform = 'rotate(0deg)';
+                            } else {
+                                video.style.transform = 'rotate(0deg)';
+                            }
+                        }
+                    }
+
+                    updateVideoOrientation();
+                    window.addEventListener('orientationchange', () => {
+                        setTimeout(updateVideoOrientation, 100);
+                    });
+                }
+
+                // Ensure video plays
+                await video.play();
+
+            } catch (err) {
+                console.error('Camera error:', err);
+                alert('Camera access error: ' + err.message);
+            }
+        }
+
+        // iOS detection and initialization
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+            document.body.classList.add('ios-device');
+            
+            // Prevent iOS bounce scroll
+            document.body.addEventListener('touchmove', (e) => {
+                e.preventDefault();
+            }, { passive: false });
+
+            // Force layout updates on orientation change
+            window.addEventListener('orientationchange', () => {
+                setTimeout(() => {
+                    window.scrollTo(0, 0);
+                    document.body.style.height = window.innerHeight + 'px';
+                }, 100);
+            });
+        }
     </script>
 </body>
 </html>

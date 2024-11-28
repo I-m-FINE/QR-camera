@@ -59,7 +59,7 @@ window.initGoogleApi = async function() {
 
 // Upload to Google Drive
 window.uploadToGoogleDrive = async function(blob, type) {
-    debugLog('Starting upload process');
+    debugLog('Starting upload process', { blobSize: blob.size, blobType: blob.type });
     
     try {
         // Check initialization
@@ -96,68 +96,95 @@ window.uploadToGoogleDrive = async function(blob, type) {
         const fileName = `${type}_${timestamp}.${type === 'image' ? 'jpg' : 'webm'}`;
         const mimeType = type === 'image' ? 'image/jpeg' : 'video/webm';
         
-        debugLog('Preparing file upload:', { fileName, mimeType });
+        debugLog('Preparing file upload:', { fileName, mimeType, folderId: window.googleApi.state.folderId });
 
         // Convert blob to base64
         const base64Data = await new Promise((resolve, reject) => {
             const reader = new FileReader();
-            reader.onloadend = () => resolve(reader.result.split(',')[1]);
-            reader.onerror = reject;
+            reader.onloadend = () => {
+                const base64 = reader.result.split(',')[1];
+                debugLog('File converted to base64', { 
+                    base64Length: base64.length,
+                    sampleStart: base64.substring(0, 50) 
+                });
+                resolve(base64);
+            };
+            reader.onerror = (error) => {
+                debugLog('Error reading file:', error);
+                reject(error);
+            };
             reader.readAsDataURL(blob);
         });
 
-        debugLog('File converted to base64, starting upload');
+        // Create multipart request
+        const boundary = '-------314159265358979323846';
+        const delimiter = "\r\n--" + boundary + "\r\n";
+        const close_delim = "\r\n--" + boundary + "--";
 
-        // Create file metadata with parent folder
-        const fileMetadata = {
+        const metadata = {
             name: fileName,
             mimeType: mimeType,
             parents: [window.googleApi.state.folderId]
         };
 
-        // Upload file
-        const response = await gapi.client.drive.files.create({
-            resource: fileMetadata,
-            media: {
-                mimeType: mimeType,
-                body: base64Data
+        const multipartRequestBody =
+            delimiter +
+            'Content-Type: application/json\r\n\r\n' +
+            JSON.stringify(metadata) +
+            delimiter +
+            'Content-Type: ' + mimeType + '\r\n' +
+            'Content-Transfer-Encoding: base64\r\n' +
+            '\r\n' +
+            base64Data +
+            close_delim;
+
+        debugLog('Sending upload request');
+
+        // Upload file using multipart
+        const response = await gapi.client.request({
+            path: '/upload/drive/v3/files',
+            method: 'POST',
+            params: {
+                uploadType: 'multipart',
+                fields: 'id,name,mimeType,webViewLink,size'
             },
-            fields: 'id,webViewLink,size,mimeType'
+            headers: {
+                'Content-Type': `multipart/related; boundary=${boundary}`
+            },
+            body: multipartRequestBody
         });
 
         debugLog('Upload response:', response);
 
-        // Verify upload
-        if (!response.result || !response.result.id) {
-            throw new Error('Upload failed - no file ID received');
+        if (!response.result) {
+            throw new Error('No response from upload request');
         }
 
-        // Verify file size
+        // Verify the upload
         const file = await gapi.client.drive.files.get({
             fileId: response.result.id,
-            fields: 'size,mimeType'
+            fields: 'id,name,mimeType,size,webViewLink'
         });
 
-        debugLog('File details:', file.result);
+        debugLog('Uploaded file details:', file.result);
 
-        if (!file.result.size || file.result.size === '0') {
-            throw new Error('Upload failed - file size is 0');
+        if (!file.result.size || parseInt(file.result.size) === 0) {
+            throw new Error('Upload verification failed - file size is 0');
         }
 
-        debugLog('Upload successful:', response.result);
-        
+        showStatus('File uploaded successfully');
+        debugLog('Upload successful:', file.result);
+
         // Open the file in a new tab
-        if (response.result.webViewLink) {
-            window.open(response.result.webViewLink, '_blank');
+        if (file.result.webViewLink) {
+            window.open(file.result.webViewLink, '_blank');
         }
 
-        return response.result;
+        return file.result;
 
     } catch (error) {
         debugLog('Upload failed:', error);
-        if (error.error === 'popup_closed_by_user') {
-            throw new Error('Authentication cancelled by user');
-        }
+        showStatus('Upload failed: ' + error.message);
         throw error;
     }
 };

@@ -471,15 +471,9 @@
             try {
                 console.log('Checking camera permissions...');
                 
-<<<<<<< HEAD
-                // Check if mediaDevices API is available
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Camera API not supported in this browser');
-=======
                 // Cleanup existing stream
                 if (video.srcObject) {
                     utils.cleanupMediaStream(video.srcObject);
->>>>>>> parent of 230417f (not flying anymore i guess)
                 }
 
                 // List available devices

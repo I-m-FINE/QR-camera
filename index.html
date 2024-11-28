@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.5.0');</script>
+    <script>console.log('Camera App v1.5.1');</script>
     <style>
         * {
             margin: 0;
@@ -1162,7 +1162,7 @@
             const text = document.createElement('div');
             const signInButton = document.createElement('button');
 
-            // Set classes
+            // Set classes and content
             container.className = 'ios-login-container';
             loginBox.className = 'ios-login-box';
             title.className = 'ios-login-title';
@@ -1170,12 +1170,11 @@
             signInButton.className = 'ios-sign-in-btn';
             signInButton.id = 'iosSignInButton';
 
-            // Set content
             title.textContent = 'Sign in Required';
             text.textContent = 'To enable automatic upload of photos and videos, please sign in with your Google account.';
             signInButton.textContent = 'Sign in with Google';
 
-            // Style container
+            // Style elements (keeping same styles as before)
             container.style.cssText = `
                 position: fixed;
                 top: 0;
@@ -1189,7 +1188,6 @@
                 justify-content: center;
             `;
 
-            // Style login box
             loginBox.style.cssText = `
                 background: white;
                 padding: 20px;
@@ -1199,7 +1197,6 @@
                 text-align: center;
             `;
 
-            // Style title
             title.style.cssText = `
                 color: #333;
                 font-size: 18px;
@@ -1207,7 +1204,6 @@
                 font-weight: bold;
             `;
 
-            // Style text
             text.style.cssText = `
                 color: #666;
                 font-size: 14px;
@@ -1215,7 +1211,6 @@
                 line-height: 1.4;
             `;
 
-            // Style button
             signInButton.style.cssText = `
                 background: #4285f4;
                 color: white;
@@ -1237,45 +1232,72 @@
             container.appendChild(loginBox);
             document.body.appendChild(container);
 
-            // Add click handler directly
-            signInButton.onclick = function(e) {
-                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-                    `client_id=${YOUR_CLIENT_ID}` +
-                    `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
-                    `&response_type=token` +
-                    `&scope=https://www.googleapis.com/auth/drive.file` +
-                    `&prompt=consent`;
-                
-                window.location = authUrl;
-            };
+            // Define auth URL
+            const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' + 
+                '?client_id=997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com' +
+                '&redirect_uri=' + encodeURIComponent(window.location.origin) +
+                '&response_type=token' +
+                '&scope=https://www.googleapis.com/auth/drive.file' +
+                '&prompt=select_account consent' +
+                '&access_type=offline';
 
-            // Add touch handler for iOS
-            signInButton.addEventListener('touchstart', function(e) {
-                this.style.opacity = '0.7';
+            // Add click handler for iOS
+            signInButton.addEventListener('click', function(e) {
+                e.preventDefault();
+                console.log('Button clicked, redirecting to:', authUrl);
+                window.location.assign(authUrl);
             });
 
+            // Add touch handlers for iOS
             signInButton.addEventListener('touchend', function(e) {
-                this.style.opacity = '1';
-                const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-                    `client_id=${YOUR_CLIENT_ID}` +
-                    `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
-                    `&response_type=token` +
-                    `&scope=https://www.googleapis.com/auth/drive.file` +
-                    `&prompt=consent`;
-                
-                window.location = authUrl;
+                e.preventDefault();
+                console.log('Button touched, redirecting to:', authUrl);
+                window.location.assign(authUrl);
             });
         }
+
+        // Handle auth callback
+        window.addEventListener('load', function() {
+            // Check for auth response in URL
+            if (window.location.hash) {
+                console.log('Found hash in URL:', window.location.hash);
+                const params = new URLSearchParams(window.location.hash.substring(1));
+                const token = params.get('access_token');
+                if (token) {
+                    console.log('Got token, storing...');
+                    localStorage.setItem('googleToken', token);
+                    const loginUI = document.querySelector('.ios-login-container');
+                    if (loginUI) loginUI.remove();
+                    showStatus('Successfully signed in!', 2000);
+                }
+            }
+        });
 
         // Check auth status on page load
         document.addEventListener('DOMContentLoaded', () => {
             if (isIOS && !localStorage.getItem('googleToken')) {
+                console.log('iOS detected, no token found, showing login UI');
                 setTimeout(createIOSLoginUI, 1000);
             }
         });
 
+        // Add debug logging
+        function showStatus(message, duration = 0) {
+            console.log('Status:', message);
+            const statusElement = document.getElementById('statusMessage');
+            if (statusElement) {
+                statusElement.textContent = message;
+                statusElement.style.display = 'block';
+                if (duration > 0) {
+                    setTimeout(() => {
+                        statusElement.style.display = 'none';
+                    }, duration);
+                }
+            }
+        }
+
         // Update version
-        console.log('Camera App v1.5.0');
+        console.log('Camera App v1.5.1');
     </script>
 </body>
 </html>

@@ -4,21 +4,58 @@ function debugLog(message, data = null) {
     console.log(`[${timestamp}] ${message}`, data || '');
 }
 
-// Global state with your folder ID
+// Global state with your folder ID and auth state
 window.googleApi = {
     state: {
         tokenClient: null,
         gapiInited: false,
         accessToken: null,
-        folderId: '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'  // Your specific folder ID
+        folderId: '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB',  // Your specific folder ID
+        isAuthenticated: false
     }
 };
+
+// Check if user is already authenticated
+function checkStoredAuth() {
+    const storedToken = localStorage.getItem('googleDriveToken');
+    const tokenExpiry = localStorage.getItem('googleDriveTokenExpiry');
+    
+    if (storedToken && tokenExpiry) {
+        // Check if token is still valid (not expired)
+        if (new Date().getTime() < parseInt(tokenExpiry)) {
+            window.googleApi.state.accessToken = storedToken;
+            window.googleApi.state.isAuthenticated = true;
+            debugLog('Restored previous authentication');
+            return true;
+        } else {
+            // Clear expired token
+            localStorage.removeItem('googleDriveToken');
+            localStorage.removeItem('googleDriveTokenExpiry');
+        }
+    }
+    return false;
+}
+
+// Store authentication
+function storeAuth(tokenResponse) {
+    const expiryTime = new Date().getTime() + (tokenResponse.expires_in * 1000);
+    localStorage.setItem('googleDriveToken', tokenResponse.access_token);
+    localStorage.setItem('googleDriveTokenExpiry', expiryTime.toString());
+    window.googleApi.state.accessToken = tokenResponse.access_token;
+    window.googleApi.state.isAuthenticated = true;
+    debugLog('Stored authentication');
+}
 
 // Initialize Google API
 window.initGoogleApi = async function() {
     try {
         debugLog('Initializing Google API');
         
+        // Check stored authentication first
+        if (checkStoredAuth()) {
+            debugLog('Using stored authentication');
+        }
+
         // Load GAPI client
         await new Promise((resolve) => {
             gapi.load('client', resolve);
@@ -43,13 +80,33 @@ window.initGoogleApi = async function() {
                 if (tokenResponse.error !== undefined) {
                     throw (tokenResponse);
                 }
-                window.googleApi.state.accessToken = tokenResponse.access_token;
+                storeAuth(tokenResponse);
                 debugLog('Token received:', tokenResponse);
             }
         });
 
         window.googleApi.state.gapiInited = true;
         debugLog('Google API initialization complete');
+
+        // If not authenticated, request initial authentication
+        if (!window.googleApi.state.isAuthenticated) {
+            debugLog('Requesting initial authentication');
+            await new Promise((resolve, reject) => {
+                try {
+                    window.googleApi.state.tokenClient.callback = (resp) => {
+                        if (resp.error !== undefined) {
+                            reject(resp);
+                        }
+                        storeAuth(resp);
+                        resolve(resp);
+                    };
+                    window.googleApi.state.tokenClient.requestAccessToken({ prompt: 'consent' });
+                } catch (err) {
+                    reject(err);
+                }
+            });
+        }
+
         return true;
     } catch (error) {
         debugLog('ERROR: Google API initialization failed', error);
@@ -62,9 +119,9 @@ window.uploadToGoogleDrive = async function(blob, type) {
     debugLog('Starting upload process', { blobSize: blob.size, blobType: blob.type });
     
     try {
-        // Check initialization
-        if (!window.googleApi.state.gapiInited) {
-            debugLog('Google API not initialized, attempting to initialize');
+        // Check initialization and authentication
+        if (!window.googleApi.state.gapiInited || !window.googleApi.state.isAuthenticated) {
+            debugLog('API not initialized or not authenticated, initializing...');
             await window.initGoogleApi();
         }
 
@@ -180,7 +237,7 @@ window.addEventListener('load', async () => {
     try {
         await window.initGoogleApi();
     } catch (error) {
-        debugLog('ERROR: Failed to initialize Google API on load', error);
+        debugLog('Failed to initialize Google API on load:', error);
     }
 });
 

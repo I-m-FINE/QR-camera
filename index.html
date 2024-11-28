@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.4.1');</script>
+    <script>console.log('Camera App v1.4.2');</script>
     <style>
         * {
             margin: 0;
@@ -755,16 +755,15 @@
             }
         });
 
-        // Update video recording with audio support
+        // Update video recording to be silent but capture audio
         document.getElementById('recordButton').addEventListener('click', async () => {
             const recordBtn = document.getElementById('recordButton');
             const video = document.getElementById('camera');
             const videoPreview = document.getElementById('videoPreview');
             
-            // Request audio access when starting recording
             if (!mediaRecorder || mediaRecorder.state === 'inactive') {
                 try {
-                    // Get audio stream
+                    // Get audio stream silently
                     const audioStream = await navigator.mediaDevices.getUserMedia({ 
                         audio: true,
                         video: false 
@@ -792,10 +791,10 @@
                         try {
                             const blob = new Blob(recordedChunks, { type: 'video/webm' });
                             
-                            // Show preview with audio
+                            // Show preview but keep it muted
                             videoPreview.src = URL.createObjectURL(blob);
                             videoPreview.style.display = 'block';
-                            videoPreview.muted = false; // Enable audio in preview
+                            videoPreview.muted = true; // Keep preview muted
                             
                             // Upload automatically
                             showStatus('Uploading video...');
@@ -812,7 +811,6 @@
                             console.error('Video upload failed:', error);
                             showStatus('Upload failed. Retrying...', 2000);
                             
-                            // Retry once
                             setTimeout(async () => {
                                 try {
                                     await uploadToDrive(blob, 'video');
@@ -825,7 +823,6 @@
                     };
                     
                     mediaRecorder.start(1000);
-                    recordBtn.textContent = 'Stop Recording';
                     recordBtn.classList.add('recording');
                     showStatus('Recording started');
                     
@@ -837,7 +834,6 @@
             } else {
                 // Stop recording and trigger upload
                 mediaRecorder.stop();
-                recordBtn.textContent = 'Record Video';
                 recordBtn.classList.remove('recording');
                 showStatus('Recording stopped');
             }
@@ -1141,7 +1137,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.4.1');
+        console.log('Camera App v1.4.2');
     </script>
 </body>
 </html>

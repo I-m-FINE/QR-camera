@@ -359,9 +359,47 @@
             }
         };
 
-        // Enhanced camera orientation handling
+        // Add permission handling utilities
+        const permissionUtils = {
+            async checkCameraPermission() {
+                try {
+                    const result = await navigator.permissions.query({ name: 'camera' });
+                    return result.state === 'granted';
+                } catch (error) {
+                    console.log('Permission query not supported');
+                    return null;
+                }
+            },
+
+            async requestCameraPermission() {
+                try {
+                    const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+                    stream.getTracks().forEach(track => track.stop());
+                    return true;
+                } catch (error) {
+                    console.error('Permission denied:', error);
+                    return false;
+                }
+            }
+        };
+
+        // Enhanced startCamera function with better permission handling
         async function startCamera(facingMode = 'environment') {
             try {
+                // Check if mediaDevices is supported
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported in this browser');
+                }
+
+                // Check and request permissions
+                const hasPermission = await permissionUtils.checkCameraPermission();
+                if (hasPermission === false) {
+                    const granted = await permissionUtils.requestCameraPermission();
+                    if (!granted) {
+                        throw new Error('Camera permission denied');
+                    }
+                }
+
                 const video = document.getElementById('camera');
                 
                 // Cleanup existing stream
@@ -369,34 +407,30 @@
                     utils.cleanupMediaStream(video.srcObject);
                 }
 
-                // Get video stream
+                // Get video stream with error handling
                 const videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
                     }
+                }).catch(error => {
+                    if (error.name === 'NotAllowedError') {
+                        throw new Error('Camera access denied. Please check your browser settings.');
+                    } else if (error.name === 'NotFoundError') {
+                        throw new Error('No camera found on this device.');
+                    } else {
+                        throw error;
+                    }
                 });
 
-                // Get video track for capabilities
-                const videoTrack = videoStream.getVideoTracks()[0];
-                
-                // Set initial video orientation
-                updateVideoOrientation(video, facingMode);
-
-                // Handle stream
+                // Set up video stream
                 video.srcObject = videoStream;
                 currentStream = videoStream;
                 currentFacingMode = facingMode;
-
-                // Add orientation change listener with debounce
-                let orientationTimeout;
-                window.addEventListener('orientationchange', () => {
-                    clearTimeout(orientationTimeout);
-                    orientationTimeout = setTimeout(() => {
-                        updateVideoOrientation(video, facingMode);
-                    }, 100);
-                });
+                
+                // Set initial orientation
+                updateVideoOrientation(video, facingMode);
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
@@ -409,7 +443,20 @@
                     };
                 });
             } catch (err) {
-                utils.handleError(err, 'Error accessing media devices');
+                // Show user-friendly error message
+                let errorMessage = 'Error accessing camera: ';
+                if (err.name === 'NotAllowedError') {
+                    errorMessage += 'Permission denied. Please allow camera access in your browser settings.';
+                } else if (err.name === 'NotFoundError') {
+                    errorMessage += 'No camera found.';
+                } else if (err.name === 'NotReadableError') {
+                    errorMessage += 'Camera is in use by another application.';
+                } else {
+                    errorMessage += err.message || 'Unknown error occurred.';
+                }
+                
+                utils.handleError(err, errorMessage);
+                showStatus(errorMessage, 5000);
                 throw err;
             }
         }
@@ -499,6 +546,11 @@
         // Enhanced event listeners
         document.addEventListener('DOMContentLoaded', async () => {
             try {
+                // Check for camera support first
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera not supported in this browser');
+                }
+
                 await startCamera();
                 
                 // Add iOS specific class
@@ -514,6 +566,7 @@
                 
             } catch (error) {
                 utils.handleError(error, 'Initialization failed');
+                showStatus('Unable to access camera. Please check permissions and try again.', 5000);
             }
         });
 
@@ -737,13 +790,35 @@
 
         // Function to show status message
         function showStatus(message, duration = 3000) {
-            const status = document.getElementById('statusMessage');
-            status.textContent = message;
-            status.style.display = 'block';
+            const statusDiv = document.getElementById('statusMessage') || createStatusElement();
+            statusDiv.textContent = message;
+            statusDiv.style.display = 'block';
             
             setTimeout(() => {
-                status.style.display = 'none';
+                statusDiv.style.display = 'none';
             }, duration);
+        }
+
+        // Create status element if it doesn't exist
+        function createStatusElement() {
+            const statusDiv = document.createElement('div');
+            statusDiv.id = 'statusMessage';
+            statusDiv.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 10px 20px;
+                border-radius: 5px;
+                z-index: 1000;
+                display: none;
+                text-align: center;
+                max-width: 80%;
+            `;
+            document.body.appendChild(statusDiv);
+            return statusDiv;
         }
 
         function setZoom(zoomLevel) {

@@ -412,7 +412,6 @@
                         right: max(30px, env(safe-area-inset-right));
                         bottom: 50%;
                         transform: translateY(50%);
-                        flex-direction: column;
                         left: auto; /* Remove left constraint */
                         width: auto; /* Allow natural width */
                     }
@@ -1169,8 +1168,69 @@
             document.querySelector('.camera-container').appendChild(zoomControls);
         }
 
-        
-        console.log('Camera App v1.2.5'); 
+        // Update button container styles
+        const buttonStyles = document.createElement('style');
+        buttonStyles.textContent = `
+            .button-container {
+                position: fixed;
+                z-index: 1000;
+                display: flex;
+                gap: 20px;
+                align-items: center;
+            }
+
+            /* Button order and layout */
+            .button-container > * {
+                order: 5; /* Default order */
+            }
+
+            #switchCamera {
+                order: 1;
+            }
+
+            #recordButton {
+                order: 2;
+            }
+
+            #upload {
+                order: 3;
+                display: none; /* Hidden by default, shown when needed */
+            }
+
+            .fullscreen-toggle {
+                order: 4;
+            }
+
+            /* Maintain spacing */
+            .button-container > *:not(:last-child) {
+                margin-right: 20px;
+            }
+
+            /* iOS specific adjustments */
+            @supports (-webkit-touch-callout: none) {
+                @media screen and (orientation: landscape) {
+                    .ios-device .button-container {
+                        flex-direction: column;
+                    }
+                    
+                    .ios-device .button-container > *:not(:last-child) {
+                        margin-right: 0;
+                        margin-bottom: 20px;
+                    }
+                }
+            }
+        `;
+
+        // Remove any existing button styles
+        const existingButtonStyles = document.querySelectorAll('style[data-purpose="button-styles"]');
+        existingButtonStyles.forEach(style => style.remove());
+
+        // Add new styles
+        buttonStyles.setAttribute('data-purpose', 'button-styles');
+        document.head.appendChild(buttonStyles);
+
+        // Update version
+        console.log('Camera App v1.2.6');
     </script>
 </body>
 </html>

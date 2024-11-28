@@ -352,99 +352,146 @@
             }
         };
 
-        // Add iOS-specific fullscreen handling
+        // Add iOS-specific styles while preserving original styles
+        const combinedStyles = document.createElement('style');
+        combinedStyles.textContent = `
+            /* Common styles for all devices */
+            .camera-container {
+                width: 100vw;
+                height: 100vh;
+                position: fixed;
+                top: 0;
+                left: 0;
+                background: #000;
+                overflow: hidden;
+            }
+
+            #camera {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+            }
+
+            .button-container {
+                position: fixed;
+                bottom: 30px;
+                left: 0;
+                right: 0;
+                display: flex;
+                justify-content: center;
+                gap: 20px;
+                z-index: 1000;
+            }
+
+            /* iOS specific styles */
+            @supports (-webkit-touch-callout: none) {
+                .ios-device .camera-container {
+                    height: -webkit-fill-available;
+                }
+
+                .ios-device .button-container {
+                    bottom: max(30px, env(safe-area-inset-bottom));
+                    padding-bottom: env(safe-area-inset-bottom);
+                    background: linear-gradient(to top, rgba(0,0,0,0.4), transparent);
+                }
+
+                .ios-device #upload {
+                    position: fixed;
+                    bottom: max(100px, calc(env(safe-area-inset-bottom) + 70px));
+                    left: 50%;
+                    transform: translateX(-50%);
+                    z-index: 1001;
+                }
+
+                .ios-device.fullscreen {
+                    position: fixed;
+                    width: 100vw;
+                    height: 100vh;
+                    height: -webkit-fill-available;
+                    top: 0;
+                    left: 0;
+                    background: black;
+                    z-index: 9999;
+                }
+
+                .ios-device.fullscreen #camera {
+                    width: 100vw;
+                    height: 100vh;
+                    height: -webkit-fill-available;
+                    object-fit: cover;
+                }
+
+                /* Handle iOS notch */
+                @supports (padding: max(0px)) {
+                    .ios-device.fullscreen {
+                        padding-top: env(safe-area-inset-top);
+                        padding-bottom: env(safe-area-inset-bottom);
+                        padding-left: env(safe-area-inset-left);
+                        padding-right: env(safe-area-inset-right);
+                    }
+                }
+            }
+        `;
+        document.head.appendChild(combinedStyles);
+
+        // Update fullscreen handling
         const fullscreenUtils = {
             isIOS: /iPad|iPhone|iPod/.test(navigator.userAgent),
 
             async enterFullscreen() {
-                const container = document.querySelector('.camera-container');
-                if (!container) return;
-
                 if (this.isIOS) {
-                    // iOS fullscreen handling
-                    document.body.classList.add('ios-fullscreen');
-                    container.style.height = window.innerHeight + 'px';
-                    // Lock to portrait orientation for iOS
-                    if (window.screen && window.screen.orientation) {
-                        try {
-                            await window.screen.orientation.lock('portrait');
-                        } catch (e) {
-                            console.log('Orientation lock not supported');
-                        }
-                    }
+                    document.body.classList.add('fullscreen');
+                    // Force resize for iOS
+                    setTimeout(() => {
+                        window.scrollTo(0, 0);
+                        document.body.style.height = window.innerHeight + 'px';
+                    }, 100);
                 } else {
-                    // Original fullscreen for other devices
-                    if (container.requestFullscreen) {
+                    const container = document.querySelector('.camera-container');
+                    if (container && container.requestFullscreen) {
                         await container.requestFullscreen();
-                    } else if (container.webkitRequestFullscreen) {
-                        await container.webkitRequestFullscreen();
-                    } else if (container.mozRequestFullScreen) {
-                        await container.mozRequestFullScreen();
                     }
                 }
             },
 
             async exitFullscreen() {
                 if (this.isIOS) {
-                    document.body.classList.remove('ios-fullscreen');
-                } else {
-                    if (document.exitFullscreen) {
-                        await document.exitFullscreen();
-                    } else if (document.webkitExitFullscreen) {
-                        await document.webkitExitFullscreen();
-                    } else if (document.mozCancelFullScreen) {
-                        await document.mozCancelFullScreen();
-                    }
+                    document.body.classList.remove('fullscreen');
+                } else if (document.exitFullscreen) {
+                    await document.exitFullscreen();
                 }
             },
 
             isFullscreen() {
-                if (this.isIOS) {
-                    return document.body.classList.contains('ios-fullscreen');
-                }
-                return !!(document.fullscreenElement || document.webkitFullscreenElement || document.mozFullScreenElement);
+                return this.isIOS ? 
+                    document.body.classList.contains('fullscreen') : 
+                    !!document.fullscreenElement;
             }
         };
 
-        // Add iOS-specific styles
-        const fullscreenStyles = document.createElement('style');
-        fullscreenStyles.textContent = `
-            /* iOS fullscreen styles */
-            .ios-fullscreen {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100%;
-                height: 100%;
-                overflow: hidden;
+        // Initialize
+        document.addEventListener('DOMContentLoaded', async () => {
+            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                document.body.classList.add('ios-device');
             }
+            
+            try {
+                await startCamera();
+                await fullscreenUtils.enterFullscreen();
+            } catch (error) {
+                console.error('Initialization failed:', error);
+            }
+        });
 
-            .ios-fullscreen .camera-container {
-                position: fixed;
-                top: 0;
-                left: 0;
-                width: 100vw;
-                height: 100vh;
-                height: -webkit-fill-available;
-                background: black;
-                z-index: 9999;
+        // Handle orientation changes
+        window.addEventListener('orientationchange', () => {
+            if (fullscreenUtils.isIOS) {
+                setTimeout(() => {
+                    window.scrollTo(0, 0);
+                    document.body.style.height = window.innerHeight + 'px';
+                }, 100);
             }
-
-            .ios-fullscreen #camera {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-
-            /* Handle iOS safe areas */
-            @supports (padding: max(0px)) {
-                .ios-fullscreen .camera-container {
-                    padding-top: env(safe-area-inset-top);
-                    padding-bottom: env(safe-area-inset-bottom);
-                }
-            }
-        `;
-        document.head.appendChild(fullscreenStyles);
+        });
 
         // Add zoom control initialization
         function initializeZoomControls() {

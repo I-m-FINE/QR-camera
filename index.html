@@ -278,19 +278,48 @@
                     video.srcObject.getTracks().forEach(track => track.stop());
                 }
 
-                const constraints = {
+                // First request audio separately to ensure it's available
+                let audioStream;
+                try {
+                    audioStream = await navigator.mediaDevices.getUserMedia({ 
+                        audio: {
+                            echoCancellation: true,
+                            noiseSuppression: true,
+                            autoGainControl: true
+                        }
+                    });
+                } catch (audioErr) {
+                    console.error('Audio access error:', audioErr);
+                    showStatus('Unable to access microphone. Audio will not be recorded.', 5000);
+                }
+
+                // Then get video stream
+                const videoStream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
-                    },
-                    audio: true  // Enable audio
-                };
+                    }
+                });
 
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                video.srcObject = stream;
-                currentStream = stream;
+                // Combine audio and video tracks
+                const tracks = [...videoStream.getTracks()];
+                if (audioStream) {
+                    tracks.push(...audioStream.getTracks());
+                }
+                
+                // Create a new MediaStream with both audio and video tracks
+                const combinedStream = new MediaStream(tracks);
+                video.srcObject = combinedStream;
+                currentStream = combinedStream;
                 currentFacingMode = facingMode;
+
+                // Verify audio track exists
+                const hasAudio = combinedStream.getAudioTracks().length > 0;
+                console.log('Audio track available:', hasAudio);
+                if (!hasAudio) {
+                    showStatus('No audio track available. Video will be silent.', 5000);
+                }
 
                 // Show zoom controls
                 document.querySelector('.zoom-controls').style.display = 'flex';
@@ -311,7 +340,7 @@
                     };
                 });
             } catch (err) {
-                console.error('Error accessing camera:', err);
+                console.error('Error accessing media devices:', err);
                 showStatus('Unable to access camera or microphone. Please check permissions.', 5000);
                 throw err;
             }
@@ -438,6 +467,16 @@
             const videoPreview = document.getElementById('videoPreview');
             
             if (!mediaRecorder || mediaRecorder.state === 'inactive') {
+                // Verify we have both audio and video tracks
+                const stream = video.srcObject;
+                const hasAudio = stream.getAudioTracks().length > 0;
+                const hasVideo = stream.getVideoTracks().length > 0;
+                
+                console.log('Starting recording with:', {
+                    audioTracks: stream.getAudioTracks().length,
+                    videoTracks: stream.getVideoTracks().length
+                });
+
                 // Clear previous recording
                 videoBlob = null;
                 imageBlob = null;
@@ -446,27 +485,51 @@
                 videoPreview.style.display = 'none';
                 uploadBtn.style.display = 'none';
                 
-                // Start recording with current stream and audio
-                const options = { mimeType: 'video/webm;codecs=vp8,opus' };
+                // Try different MIME types for better compatibility
+                let options;
+                const mimeTypes = [
+                    'video/webm;codecs=vp8,opus',
+                    'video/webm;codecs=vp9,opus',
+                    'video/webm;codecs=h264,opus',
+                    'video/webm'
+                ];
+
+                for (const mimeType of mimeTypes) {
+                    if (MediaRecorder.isTypeSupported(mimeType)) {
+                        options = { mimeType };
+                        console.log('Using MIME type:', mimeType);
+                        break;
+                    }
+                }
+
                 try {
-                    mediaRecorder = new MediaRecorder(video.srcObject, options);
+                    mediaRecorder = new MediaRecorder(stream, options);
+                    console.log('MediaRecorder created with options:', options);
                 } catch (e) {
                     console.error('MediaRecorder error:', e);
-                    mediaRecorder = new MediaRecorder(video.srcObject);
+                    mediaRecorder = new MediaRecorder(stream);
                 }
                 
-                mediaRecorder.ondataavailable = (e) => recordedChunks.push(e.data);
+                mediaRecorder.ondataavailable = (e) => {
+                    if (e.data.size > 0) {
+                        recordedChunks.push(e.data);
+                        console.log('Recorded chunk size:', e.data.size);
+                    }
+                };
+
                 mediaRecorder.onstop = () => {
                     videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
+                    console.log('Recording completed, blob size:', videoBlob.size);
                     videoPreview.src = URL.createObjectURL(videoBlob);
                     videoPreview.style.display = 'block';
                     uploadBtn.style.display = 'inline-block';
                 };
-                mediaRecorder.start();
+
+                // Request data more frequently for better reliability
+                mediaRecorder.start(1000); // Get data every second
                 recordBtn.textContent = 'Stop Recording';
                 recordBtn.classList.add('recording');
             } else {
-                // Stop recording
                 mediaRecorder.stop();
                 recordBtn.textContent = 'Record Video';
                 recordBtn.classList.remove('recording');

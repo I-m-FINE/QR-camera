@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.6.3');</script>
+    <script>console.log('Camera App v1.6.4');</script>
     <style>
         * {
             margin: 0;
@@ -1195,17 +1195,21 @@
             const loginBox = document.createElement('div');
             const title = document.createElement('div');
             const text = document.createElement('div');
+            const signInLink = document.createElement('a');
 
             // Set classes and content
             container.className = 'ios-login-container';
             loginBox.className = 'ios-login-box';
             title.className = 'ios-login-title';
             text.className = 'ios-login-text';
+            signInLink.className = 'ios-sign-in-btn';
+            signInLink.id = 'iosSignInButton';
 
             title.textContent = 'Sign in Required';
             text.textContent = 'To enable automatic upload of photos and videos, please sign in with your Google account.';
+            signInLink.textContent = 'Sign in with Google';
 
-            // Style container
+            // Style elements
             container.style.cssText = `
                 position: fixed;
                 top: 0;
@@ -1219,7 +1223,6 @@
                 justify-content: center;
             `;
 
-            // Style login box
             loginBox.style.cssText = `
                 background: white;
                 padding: 20px;
@@ -1229,7 +1232,6 @@
                 text-align: center;
             `;
 
-            // Style title and text
             title.style.cssText = `
                 color: #333;
                 font-size: 18px;
@@ -1244,26 +1246,35 @@
                 line-height: 1.4;
             `;
 
-            // Simplified auth URL with only required parameters
-            const redirectUri = 'https://i-m-fine.github.io';
+            signInLink.style.cssText = `
+                display: block;
+                background: #4285f4;
+                color: white;
+                font-size: 16px;
+                padding: 12px 24px;
+                border-radius: 24px;
+                text-decoration: none;
+                width: 80%;
+                margin: 0 auto;
+                font-weight: bold;
+                -webkit-tap-highlight-color: transparent;
+            `;
+
+            // Set direct auth URL
+            const redirectUri = 'https://i-m-fine.github.io/QR-camera/';
             const authUrl = 'https://accounts.google.com/o/oauth2/v2/auth' + 
                 '?client_id=997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com' +
                 '&redirect_uri=' + encodeURIComponent(redirectUri) +
                 '&response_type=token' +
                 '&scope=https://www.googleapis.com/auth/drive.file';
 
-            // Create sign in link
-            const signInLink = document.createElement('a');
-            signInLink.className = 'ios-sign-in-btn';
-            signInLink.id = 'iosSignInButton';
-            signInLink.textContent = 'Sign in with Google';
             signInLink.href = authUrl;
 
             // Add click handler
             signInLink.onclick = function(e) {
                 e.preventDefault();
                 console.log('Starting auth redirect...');
-                window.location.href = authUrl;
+                window.location.replace(authUrl);
             };
 
             // Build DOM
@@ -1276,14 +1287,10 @@
 
         // Handle auth callback
         window.addEventListener('load', function() {
-            console.log('Checking for auth callback...');
-            
             if (window.location.hash) {
-                console.log('Found hash:', window.location.hash);
                 const params = new URLSearchParams(window.location.hash.substring(1));
                 const token = params.get('access_token');
                 if (token) {
-                    console.log('Got token, storing...');
                     localStorage.setItem('googleToken', token);
                     const loginUI = document.querySelector('.ios-login-container');
                     if (loginUI) loginUI.remove();
@@ -1329,7 +1336,7 @@
         window.addEventListener('load', checkToken);
 
         // Update version
-        console.log('Camera App v1.6.3');
+        console.log('Camera App v1.6.4');
     </script>
 </body>
 </html>

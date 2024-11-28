@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.6');</script>
+    <script>console.log('Camera App v1.3.7');</script>
     <style>
         * {
             margin: 0;
@@ -354,6 +354,9 @@
         let currentZoom = 1;
         let currentStream = null;
 
+        // Global variable to track if camera is running
+        let isCameraRunning = false;
+
         // Add error handling and cleanup utilities
         const utils = {
             cleanupMediaStream: (stream) => {
@@ -625,27 +628,14 @@
             }
         }
 
-        // Add explicit permission check before starting camera
-        async function checkCameraPermission() {
-            try {
-                // First check if the API is available
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Camera API not supported in this browser');
-                }
-
-                // Explicitly request camera permission
-                const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-                stream.getTracks().forEach(track => track.stop()); // Stop test stream
-                return true;
-            } catch (err) {
-                console.error('Camera permission error:', err);
-                alert('Please enable camera access in your browser settings and refresh the page.');
-                return false;
-            }
-        }
-
-        // Simplified camera initialization without unnecessary alerts
+        // Simplified camera initialization without alerts
         async function startCamera(facingMode = 'environment') {
+            // If camera is already running, don't reinitialize
+            if (isCameraRunning) {
+                console.log('Camera already running, skipping initialization');
+                return;
+            }
+
             try {
                 console.log('Starting camera initialization...');
                 const video = document.getElementById('camera');
@@ -656,203 +646,48 @@
                     currentStream = null;
                 }
 
-                // Basic constraints first
-                let stream = null;
-                try {
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: true,
-                        audio: false
-                    });
-                } catch (e) {
-                    console.log('Basic camera access failed, trying with constraints...');
-                    stream = await navigator.mediaDevices.getUserMedia({
-                        video: {
-                            facingMode: facingMode,
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        },
-                        audio: false
-                    });
-                }
+                // Get camera stream
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                });
 
-                if (!stream) {
-                    console.error('Failed to get camera stream');
-                    return;
-                }
-
-                // Assign stream to video element
+                // Set up video element
                 video.srcObject = stream;
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
                 // Wait for video to be ready
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = resolve;
-                    // Remove timeout to prevent unnecessary alerts
-                });
-
-                // Try to play without alerts
-                try {
-                    await video.play();
-                    console.log('Camera started successfully');
-                } catch (playError) {
-                    console.error('Play failed:', playError);
-                    // Silent fallback for iOS
-                    const playButton = document.createElement('button');
-                    playButton.textContent = 'Start Camera';
-                    playButton.onclick = async () => {
-                        try {
-                            await video.play();
-                            playButton.remove();
-                        } catch (e) {
-                            console.error('Manual play failed:', e);
-                        }
-                    };
-                    document.body.appendChild(playButton);
-                }
+                await video.play();
+                
+                // Mark camera as running
+                isCameraRunning = true;
+                console.log('Camera started successfully');
 
             } catch (error) {
-                console.error('Camera initialization failed:', error);
-                // Log error but don't show alert
+                console.error('Camera initialization error:', error);
+                isCameraRunning = false;
             }
         }
 
-        // Initialize on page load without alerts
+        // Initialize on page load
         document.addEventListener('DOMContentLoaded', () => {
-            setTimeout(async () => {
-                try {
-                    await startCamera();
-                } catch (error) {
-                    console.error('Initial camera start failed:', error);
-                    // Silent retry after 1 second
-                    setTimeout(() => startCamera(), 1000);
-                }
-            }, 100);
+            startCamera().catch(console.error);
         });
 
-        // Handle visibility changes silently
+        // Handle visibility changes
         document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                startCamera(currentFacingMode);
-            } else if (currentStream) {
-                currentStream.getTracks().forEach(track => track.stop());
-            }
-        });
-
-        // Handle orientation changes
-        window.addEventListener('orientationchange', async () => {
-            console.log('Orientation changed, restarting camera');
-            await new Promise(resolve => setTimeout(resolve, 100));
-            try {
-                await startCamera(currentFacingMode);
-            } catch (error) {
-                console.error('Error handling orientation change:', error);
-            }
-        });
-
-        // Add basic styles
-        const cameraStyles = document.createElement('style');
-        cameraStyles.textContent = `
-            #camera {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-                position: absolute;
-                top: 0;
-                left: 0;
-            }
-
-            .camera-container {
-                width: 100vw;
-                height: 100vh;
-                position: fixed;
-                top: 0;
-                left: 0;
-                background: #000;
-                overflow: hidden;
-            }
-        `;
-        document.head.appendChild(cameraStyles);
-
-        // Orientation handling
-        function updateVideoOrientation() {
-            const video = document.getElementById('camera');
-            const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-            
-            if (currentFacingMode === 'user') {
-                if (isLandscape) {
-                    video.style.transform = 'scale(-1, 1) rotate(270deg)';
-                } else {
-                    video.style.transform = 'scale(-1, 1)';
+            if (document.visibilityState === 'visible' && !isCameraRunning) {
+                startCamera(currentFacingMode).catch(console.error);
+            } else if (document.visibilityState === 'hidden') {
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                    isCameraRunning = false;
                 }
-            } else {
-                video.style.transform = 'none';
-            }
-        }
-
-        // Initialize camera with proper error handling
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                console.log('Initializing camera...');
-                await startCamera();
-                console.log('Camera initialized successfully');
-            } catch (error) {
-                console.error('Camera initialization failed:', error);
-            }
-        });
-
-        // Add orientation change listener
-        window.addEventListener('orientationchange', () => {
-            setTimeout(updateVideoOrientation, 100);
-        });
-
-        // Enhanced recording handler
-        function initializeMediaRecorder(stream) {
-            if (!stream) return null;
-            
-            // Try different MIME types
-            const mimeTypes = [
-                'video/webm;codecs=vp8,opus',
-                'video/webm;codecs=vp9,opus',
-                'video/webm;codecs=h264,opus',
-                'video/webm'
-            ];
-            
-            let options;
-            for (const mimeType of mimeTypes) {
-                if (MediaRecorder.isTypeSupported(mimeType)) {
-                    options = { mimeType };
-                    console.log('Using MIME type:', mimeType);
-                    break;
-                }
-            }
-            
-            try {
-                return new MediaRecorder(stream, options);
-            } catch (e) {
-                utils.handleError(e, 'MediaRecorder creation failed');
-                return new MediaRecorder(stream);
-            }
-        }
-
-        // Enhanced event listeners
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await startCamera();
-                
-                // Add iOS specific class
-                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                    document.body.classList.add('ios-device');
-                }
-                
-                // Initialize zoom controls
-                initializeZoomControls();
-
-                // Enter fullscreen after successful initialization
-                await fullscreenUtils.enterFullscreen();
-                
-            } catch (error) {
-                utils.handleError(error, 'Initialization failed');
             }
         });
 
@@ -1334,7 +1169,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.3.6');
+        console.log('Camera App v1.3.7');
     </script>
 </body>
 </html>

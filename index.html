@@ -534,11 +534,11 @@
             // ... your existing initialization code ...
         });
 
-        // Update the capture photo function
+        // Photo capture function
         async function capturePhoto() {
             debugLog('Starting photo capture');
             if (isProcessing) {
-                debugLog('Capture already in progress, returning');
+                debugLog('Already processing, returning');
                 return;
             }
             isProcessing = true;
@@ -549,7 +549,7 @@
                     throw new Error('Camera not ready');
                 }
 
-                debugLog('Creating canvas for capture');
+                // Create canvas and capture frame
                 const canvas = document.createElement('canvas');
                 canvas.width = video.videoWidth;
                 canvas.height = video.videoHeight;
@@ -557,28 +557,65 @@
                 const context = canvas.getContext('2d');
                 context.drawImage(video, 0, 0);
 
-                debugLog('Converting canvas to blob');
-                const capturedBlob = await new Promise((resolve) => {
-                    canvas.toBlob(resolve, 'image/jpeg', 0.8);
+                // Convert to blob
+                const capturedBlob = await new Promise((resolve, reject) => {
+                    canvas.toBlob((blob) => {
+                        if (blob) {
+                            resolve(blob);
+                        } else {
+                            reject(new Error('Failed to create blob'));
+                        }
+                    }, 'image/jpeg', 0.8);
                 });
 
-                if (!capturedBlob) {
-                    throw new Error('Failed to create image');
+                debugLog('Photo captured successfully', { size: capturedBlob.size });
+
+                // Store the captured photo
+                if (!window.capturedMedia) {
+                    window.capturedMedia = {};
+                }
+                window.capturedMedia.currentPhoto = capturedBlob;
+
+                // Show upload button
+                const uploadButton = document.getElementById('uploadPhoto');
+                if (uploadButton) {
+                    uploadButton.style.display = 'block';
+                    debugLog('Upload button displayed');
                 }
 
-                debugLog('Photo captured successfully', { blobSize: capturedBlob.size });
-                window.capturedMedia.currentPhoto = capturedBlob;
-                await updatePreviewButton(capturedBlob);
-                window.handleCapture(capturedBlob, 'image');
+                showStatus('Photo captured successfully');
 
             } catch (error) {
-                debugLog('ERROR: Photo capture failed', error);
+                debugLog('Photo capture error:', error);
                 showStatus('Failed to capture photo: ' + error.message);
             } finally {
                 isProcessing = false;
-                debugLog('Photo capture process completed');
             }
         }
+
+        // Update the event listener
+        document.addEventListener('DOMContentLoaded', () => {
+            // Initialize camera
+            initializeCamera().catch(error => {
+                debugLog('Camera initialization failed:', error);
+                showStatus('Failed to initialize camera');
+            });
+
+            // Add capture button listener
+            const captureButton = document.getElementById('capture');
+            if (captureButton) {
+                captureButton.addEventListener('click', async () => {
+                    try {
+                        await capturePhoto();
+                    } catch (error) {
+                        debugLog('Capture error:', error);
+                        showStatus('Failed to capture: ' + error.message);
+                    }
+                });
+            }
+
+            // ... rest of your event listeners ...
+        });
 
         // Update the video recording handler
         async function toggleRecording() {

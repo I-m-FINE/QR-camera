@@ -383,136 +383,71 @@
             }
         };
 
-        // Enhanced startCamera function with better permission handling
+        // Basic working camera initialization
         async function startCamera(facingMode = 'environment') {
             try {
-                // Check if mediaDevices is supported
-                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-                    throw new Error('Camera API not supported in this browser');
-                }
-
-                // Check and request permissions
-                const hasPermission = await permissionUtils.checkCameraPermission();
-                if (hasPermission === false) {
-                    const granted = await permissionUtils.requestCameraPermission();
-                    if (!granted) {
-                        throw new Error('Camera permission denied');
-                    }
-                }
-
                 const video = document.getElementById('camera');
                 
                 // Cleanup existing stream
                 if (video.srcObject) {
-                    utils.cleanupMediaStream(video.srcObject);
+                    video.srcObject.getTracks().forEach(track => track.stop());
                 }
 
-                // Get video stream with error handling
-                const videoStream = await navigator.mediaDevices.getUserMedia({
+                // Basic video stream request
+                const stream = await navigator.mediaDevices.getUserMedia({
                     video: {
                         facingMode: facingMode,
                         width: { ideal: 1920 },
                         height: { ideal: 1080 }
                     }
-                }).catch(error => {
-                    if (error.name === 'NotAllowedError') {
-                        throw new Error('Camera access denied. Please check your browser settings.');
-                    } else if (error.name === 'NotFoundError') {
-                        throw new Error('No camera found on this device.');
-                    } else {
-                        throw error;
-                    }
                 });
 
                 // Set up video stream
-                video.srcObject = videoStream;
-                currentStream = videoStream;
+                video.srcObject = stream;
+                currentStream = stream;
                 currentFacingMode = facingMode;
-                
-                // Set initial orientation
-                updateVideoOrientation(video, facingMode);
+
+                // Simple orientation handling
+                if (facingMode === 'user') {
+                    video.style.transform = 'scale(-1, 1)'; // Just mirror for front camera
+                } else {
+                    video.style.transform = 'none'; // No transform for back camera
+                }
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play()
                             .then(resolve)
                             .catch(error => {
-                                utils.handleError(error, 'Error playing video');
+                                console.error('Error playing video:', error);
                                 resolve();
                             });
                     };
                 });
             } catch (err) {
-                // Show user-friendly error message
-                let errorMessage = 'Error accessing camera: ';
-                if (err.name === 'NotAllowedError') {
-                    errorMessage += 'Permission denied. Please allow camera access in your browser settings.';
-                } else if (err.name === 'NotFoundError') {
-                    errorMessage += 'No camera found.';
-                } else if (err.name === 'NotReadableError') {
-                    errorMessage += 'Camera is in use by another application.';
-                } else {
-                    errorMessage += err.message || 'Unknown error occurred.';
-                }
-                
-                utils.handleError(err, errorMessage);
-                showStatus(errorMessage, 5000);
+                console.error('Error accessing camera:', err);
                 throw err;
             }
         }
 
-        // Improved orientation handling
-        function updateVideoOrientation(video, facingMode) {
-            const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-            
-            // Reset any existing transforms
-            video.style.transform = '';
-            
-            if (facingMode === 'user') {
-                if (isLandscape) {
-                    if (isIOS) {
-                        video.style.transform = 'scale(-1, 1) rotate(180deg)';
-                    } else {
-                        // For Android and other devices
-                        if (window.orientation === 90) {
-                            video.style.transform = 'scale(-1, 1) rotate(270deg)';
-                        } else {
-                            video.style.transform = 'scale(-1, 1) rotate(90deg)';
-                        }
-                    }
-                } else {
-                    // Portrait mode
-                    video.style.transform = 'scale(-1, 1)';
-                }
-            } else {
-                // Back camera
-                if (isLandscape) {
-                    if (isIOS) {
-                        video.style.transform = 'rotate(90deg)';
-                    } else {
-                        // For Android and other devices
-                        if (window.orientation === 90) {
-                            video.style.transform = 'rotate(0deg)';
-                        } else {
-                            video.style.transform = 'rotate(180deg)';
-                        }
-                    }
-                } else {
-                    // Portrait mode
-                    video.style.transform = 'rotate(0deg)';
-                }
+        // Simple camera switch handler
+        document.getElementById('switchCamera').addEventListener('click', async () => {
+            const newMode = currentFacingMode === 'environment' ? 'user' : 'environment';
+            try {
+                await startCamera(newMode);
+            } catch (error) {
+                console.error('Error switching camera:', error);
             }
+        });
 
-            // Log current orientation state for debugging
-            console.log('Orientation Update:', {
-                facingMode,
-                isLandscape,
-                isIOS,
-                orientation: window.orientation,
-                transform: video.style.transform
-            });
-        }
+        // Initialize on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await startCamera();
+            } catch (error) {
+                console.error('Camera initialization failed:', error);
+            }
+        });
 
         // Enhanced recording handler
         function initializeMediaRecorder(stream) {
@@ -635,17 +570,6 @@
                 preview.style.display = 'block';
                 uploadBtn.style.display = 'inline-block';
             }, 'image/jpeg', 0.8);
-        });
-
-        // Update switch camera handler
-        document.getElementById('switchCamera').addEventListener('click', async () => {
-            const newMode = currentFacingMode === 'environment' ? 'user' : 'environment';
-            
-            try {
-                await startCamera(newMode);
-            } catch (error) {
-                utils.handleError(error, 'Error switching camera');
-            }
         });
 
         // Update the record button handler

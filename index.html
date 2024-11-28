@@ -243,25 +243,19 @@
             try {
                 const video = document.getElementById('camera');
                 
-                // Always mute the preview
-                video.muted = true;
-                
                 // Stop any existing stream
                 if (video.srcObject) {
                     video.srcObject.getTracks().forEach(track => track.stop());
                 }
 
-                // Check if device is iOS
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                // Always mute the preview video
+                video.muted = true;
                 
-                // Configure audio constraints based on device
+                // Configure audio constraints
                 const audioConstraints = {
                     echoCancellation: true,
                     noiseSuppression: true,
-                    autoGainControl: true,
-                    // iOS sometimes needs these specific constraints
-                    sampleRate: 44100,
-                    sampleSize: 16
+                    autoGainControl: true
                 };
 
                 // First request audio
@@ -275,24 +269,16 @@
                     showStatus('Unable to access microphone. Audio will not be recorded.', 5000);
                 }
 
-                // Configure video constraints based on device
-                const videoConstraints = {
-                    facingMode: facingMode,
-                    width: { ideal: 1920 },
-                    height: { ideal: 1080 }
-                };
-
-                // Some devices work better with these constraints
-                if (isIOS) {
-                    videoConstraints.width = { min: 640, ideal: 1920, max: 1920 };
-                    videoConstraints.height = { min: 480, ideal: 1080, max: 1080 };
-                }
-
+                // Then get video stream
                 const videoStream = await navigator.mediaDevices.getUserMedia({
-                    video: videoConstraints
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
                 });
 
-                // Combine streams
+                // Combine streams but ensure preview remains muted
                 const tracks = [...videoStream.getTracks()];
                 if (audioStream) {
                     tracks.push(...audioStream.getTracks());
@@ -303,14 +289,9 @@
                 currentStream = combinedStream;
                 currentFacingMode = facingMode;
 
-                // Log device information
-                const videoTrack = videoStream.getVideoTracks()[0];
-                console.log('Using device:', videoTrack.label);
-                console.log('Video constraints:', videoTrack.getConstraints());
-                if (audioStream) {
-                    const audioTrack = audioStream.getAudioTracks()[0];
-                    console.log('Using audio device:', audioTrack.label);
-                }
+                // Ensure preview stays muted
+                video.volume = 0;
+                video.defaultMuted = true;
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
@@ -502,9 +483,11 @@
 
                 mediaRecorder.onstop = () => {
                     videoBlob = new Blob(recordedChunks, { type: 'video/webm' });
-                    console.log('Recording completed, blob size:', videoBlob.size);
+                    const videoPreview = document.getElementById('videoPreview');
                     videoPreview.src = URL.createObjectURL(videoBlob);
                     videoPreview.style.display = 'block';
+                    // Ensure preview is muted by default
+                    videoPreview.muted = true;
                     uploadBtn.style.display = 'inline-block';
                 };
 

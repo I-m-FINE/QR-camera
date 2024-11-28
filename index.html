@@ -359,7 +359,7 @@
             }
         };
 
-        // Enhanced startCamera function
+        // Enhanced camera orientation handling
         async function startCamera(facingMode = 'environment') {
             try {
                 const video = document.getElementById('camera');
@@ -380,78 +380,20 @@
 
                 // Get video track for capabilities
                 const videoTrack = videoStream.getVideoTracks()[0];
-                const capabilities = videoTrack.getCapabilities();
                 
-                // Check and handle orientation
-                if (facingMode === 'user') {
-                    // For front camera
-                    if (screen.orientation.type.includes('landscape')) {
-                        // In landscape mode
-                        if (capabilities.facingMode.includes('user')) {
-                            video.style.transform = 'scale(-1, 1) rotate(180deg)';
-                        } else {
-                            video.style.transform = 'scale(-1, 1)';
-                        }
-                    } else {
-                        // In portrait mode
-                        video.style.transform = 'scale(-1, 1)';
-                    }
-                } else {
-                    // For back camera
-                    if (screen.orientation.type.includes('landscape')) {
-                        video.style.transform = 'rotate(0deg)';
-                    } else {
-                        video.style.transform = 'rotate(0deg)';
-                    }
-                }
+                // Set initial video orientation
+                updateVideoOrientation(video, facingMode);
 
-                // Always mute preview
-                video.muted = true;
-                
-                // Configure audio constraints
-                const audioConstraints = hasMicrophone ? {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: 44100,
-                    sampleSize: 16
-                } : false;
-
-                // Get audio stream if available
-                let audioStream;
-                if (hasMicrophone) {
-                    try {
-                        audioStream = await navigator.mediaDevices.getUserMedia({ audio: audioConstraints });
-                    } catch (audioErr) {
-                        utils.handleError(audioErr, 'Unable to access microphone');
-                    }
-                }
-
-                // Combine streams
-                const tracks = [...videoStream.getTracks()];
-                if (audioStream) {
-                    tracks.push(...audioStream.getTracks());
-                }
-                
-                const combinedStream = new MediaStream(tracks);
-                video.srcObject = combinedStream;
-                currentStream = combinedStream;
+                // Handle stream
+                video.srcObject = videoStream;
+                currentStream = videoStream;
                 currentFacingMode = facingMode;
 
-                // Log active tracks
-                console.log('[Stream Info]', {
-                    videoTracks: combinedStream.getVideoTracks().length,
-                    audioTracks: combinedStream.getAudioTracks().length
-                });
-
-                // Re-enter fullscreen if needed after camera switch
-                if (document.body.classList.contains('fullscreen-mode') && !fullscreenUtils.isFullscreen()) {
-                    await fullscreenUtils.enterFullscreen();
-                }
-
-                // Add orientation change listener
+                // Add orientation change listener with debounce
+                let orientationTimeout;
                 window.addEventListener('orientationchange', () => {
-                    setTimeout(() => {
+                    clearTimeout(orientationTimeout);
+                    orientationTimeout = setTimeout(() => {
                         updateVideoOrientation(video, facingMode);
                     }, 100);
                 });
@@ -472,17 +414,57 @@
             }
         }
 
-        // Function to update video orientation
+        // Improved orientation handling
         function updateVideoOrientation(video, facingMode) {
+            const isLandscape = window.matchMedia("(orientation: landscape)").matches;
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            // Reset any existing transforms
+            video.style.transform = '';
+            
             if (facingMode === 'user') {
-                if (screen.orientation.type.includes('landscape')) {
-                    video.style.transform = 'scale(-1, 1) rotate(180deg)';
+                if (isLandscape) {
+                    if (isIOS) {
+                        video.style.transform = 'scale(-1, 1) rotate(180deg)';
+                    } else {
+                        // For Android and other devices
+                        if (window.orientation === 90) {
+                            video.style.transform = 'scale(-1, 1) rotate(270deg)';
+                        } else {
+                            video.style.transform = 'scale(-1, 1) rotate(90deg)';
+                        }
+                    }
                 } else {
+                    // Portrait mode
                     video.style.transform = 'scale(-1, 1)';
                 }
             } else {
-                video.style.transform = 'rotate(0deg)';
+                // Back camera
+                if (isLandscape) {
+                    if (isIOS) {
+                        video.style.transform = 'rotate(90deg)';
+                    } else {
+                        // For Android and other devices
+                        if (window.orientation === 90) {
+                            video.style.transform = 'rotate(0deg)';
+                        } else {
+                            video.style.transform = 'rotate(180deg)';
+                        }
+                    }
+                } else {
+                    // Portrait mode
+                    video.style.transform = 'rotate(0deg)';
+                }
             }
+
+            // Log current orientation state for debugging
+            console.log('Orientation Update:', {
+                facingMode,
+                isLandscape,
+                isIOS,
+                orientation: window.orientation,
+                transform: video.style.transform
+            });
         }
 
         // Enhanced recording handler
@@ -602,17 +584,12 @@
             }, 'image/jpeg', 0.8);
         });
 
-        // Add switch camera button handler
+        // Update switch camera handler
         document.getElementById('switchCamera').addEventListener('click', async () => {
             const newMode = currentFacingMode === 'environment' ? 'user' : 'environment';
             
             try {
                 await startCamera(newMode);
-                
-                // Update orientation immediately after switch
-                const video = document.getElementById('camera');
-                updateVideoOrientation(video, newMode);
-                
             } catch (error) {
                 utils.handleError(error, 'Error switching camera');
             }
@@ -825,6 +802,51 @@
             }
         `;
         document.head.appendChild(style);
+
+        // Add CSS for better video handling
+        const style = document.createElement('style');
+        style.textContent = `
+            .camera-container {
+                position: relative;
+                width: 100%;
+                height: 100%;
+                overflow: hidden;
+            }
+
+            #camera {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                transition: transform 0.3s ease-out;
+            }
+
+            @media screen and (orientation: landscape) {
+                #camera {
+                    width: 100vh;
+                    height: 100vw;
+                    max-width: none;
+                    position: absolute;
+                    top: 50%;
+                    left: 50%;
+                    transform-origin: center;
+                }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // Add orientation change listener
+        window.addEventListener('orientationchange', () => {
+            const video = document.getElementById('camera');
+            setTimeout(() => {
+                updateVideoOrientation(video, currentFacingMode);
+            }, 100);
+        });
+
+        // Add resize listener for orientation changes
+        window.addEventListener('resize', () => {
+            const video = document.getElementById('camera');
+            updateVideoOrientation(video, currentFacingMode);
+        });
     </script>
 </body>
 </html>

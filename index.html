@@ -466,71 +466,109 @@
             setupZoomControls();
         }
 
-        // Basic camera initialization
-        async function startCamera(facingMode = 'environment') {
-            const video = document.getElementById('camera');
-            
+        // Add this debug function
+        async function checkCameraAccess() {
             try {
-                // Stop any existing stream
-                if (video.srcObject) {
-                    video.srcObject.getTracks().forEach(track => track.stop());
+                console.log('Checking camera permissions...');
+                
+                // Check if mediaDevices API is available
+                if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                    throw new Error('Camera API not supported in this browser');
                 }
 
-                // Request camera with basic constraints
-                const constraints = {
-                    video: { facingMode: facingMode },
+                // List available devices
+                const devices = await navigator.mediaDevices.enumerateDevices();
+                const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                console.log('Available video devices:', videoDevices);
+
+                // Try to access the camera
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
                     audio: false
-                };
+                });
 
-                console.log('Requesting camera with constraints:', constraints);
-                
-                const stream = await navigator.mediaDevices.getUserMedia(constraints);
-                console.log('Got media stream:', stream);
-
-                // Attach stream to video element
-                video.srcObject = stream;
-                currentStream = stream;
-                currentFacingMode = facingMode;
-
-                // Play video
-                video.onloadedmetadata = async () => {
-                    try {
-                        await video.play();
-                        console.log('Video playing');
-                    } catch (e) {
-                        console.error('Error playing video:', e);
-                    }
-                };
+                console.log('Camera access granted:', stream);
+                return stream;
 
             } catch (err) {
                 console.error('Camera access error:', err);
                 alert('Camera error: ' + err.message);
+                return null;
             }
         }
 
-        // Make sure video element exists and has correct attributes
-        document.addEventListener('DOMContentLoaded', () => {
-            const container = document.querySelector('.camera-container');
-            if (!container) {
-                console.error('Camera container not found');
-                return;
-            }
+        // Update startCamera function with more logging
+        async function startCamera(facingMode = 'environment') {
+            try {
+                console.log('Starting camera with facing mode:', facingMode);
+                const video = document.getElementById('camera');
+                
+                if (!video) {
+                    throw new Error('Video element not found');
+                }
 
-            // Ensure video element exists with correct attributes
-            let video = document.getElementById('camera');
-            if (!video) {
-                video = document.createElement('video');
-                video.id = 'camera';
-                video.setAttribute('playsinline', ''); // Important for iOS
-                video.setAttribute('autoplay', '');
-                video.setAttribute('muted', '');
-                container.appendChild(video);
-            }
+                // Check camera access first
+                const accessStream = await checkCameraAccess();
+                if (!accessStream) {
+                    throw new Error('Could not access camera');
+                }
 
-            // Start camera
-            startCamera().catch(err => {
-                console.error('Failed to start camera:', err);
-            });
+                // Stop any existing streams
+                if (currentStream) {
+                    console.log('Stopping existing stream');
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                // Request camera with specific constraints
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+
+                console.log('Requesting camera with constraints:', constraints);
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                console.log('Got new stream:', stream);
+                video.srcObject = stream;
+                currentStream = stream;
+                currentFacingMode = facingMode;
+
+                // Log video element state
+                console.log('Video element state:', {
+                    videoWidth: video.videoWidth,
+                    videoHeight: video.videoHeight,
+                    readyState: video.readyState,
+                    paused: video.paused
+                });
+
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        console.log('Video metadata loaded');
+                        resolve();
+                    };
+                });
+
+                await video.play();
+                console.log('Video playback started');
+
+            } catch (err) {
+                console.error('Detailed camera error:', err);
+                alert('Camera error: ' + err.message);
+            }
+        }
+
+        // Initialize on page load with debug info
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('DOM loaded, initializing camera...');
+            try {
+                await startCamera();
+            } catch (error) {
+                console.error('Camera initialization failed:', error);
+            }
         });
 
         // Add basic styles

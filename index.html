@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.7');</script>
+    <script>console.log('Camera App v1.3.8');</script>
     <style>
         * {
             margin: 0;
@@ -354,8 +354,9 @@
         let currentZoom = 1;
         let currentStream = null;
 
-        // Global variable to track if camera is running
+        // Global variables
         let isCameraRunning = false;
+        let isInitializing = false;
 
         // Add error handling and cleanup utilities
         const utils = {
@@ -628,15 +629,16 @@
             }
         }
 
-        // Simplified camera initialization without alerts
+        // Simplified camera initialization
         async function startCamera(facingMode = 'environment') {
-            // If camera is already running, don't reinitialize
-            if (isCameraRunning) {
-                console.log('Camera already running, skipping initialization');
+            // Prevent multiple simultaneous initializations
+            if (isInitializing || isCameraRunning) {
+                console.log('Camera already running or initializing, skipping');
                 return;
             }
 
             try {
+                isInitializing = true;
                 console.log('Starting camera initialization...');
                 const video = document.getElementById('camera');
                 
@@ -662,27 +664,32 @@
                 currentFacingMode = facingMode;
 
                 // Wait for video to be ready
-                await video.play();
-                
-                // Mark camera as running
-                isCameraRunning = true;
-                console.log('Camera started successfully');
+                video.onloadedmetadata = () => {
+                    video.play()
+                        .then(() => {
+                            console.log('Camera started successfully');
+                            isCameraRunning = true;
+                        })
+                        .catch(console.error);
+                };
 
             } catch (error) {
-                console.error('Camera initialization error:', error);
-                isCameraRunning = false;
+                console.error('Camera error:', error);
+            } finally {
+                isInitializing = false;
             }
         }
 
-        // Initialize on page load
+        // Initialize on page load with delay
         document.addEventListener('DOMContentLoaded', () => {
-            startCamera().catch(console.error);
+            // Small delay to ensure everything is ready
+            setTimeout(() => startCamera(), 500);
         });
 
         // Handle visibility changes
         document.addEventListener('visibilitychange', () => {
             if (document.visibilityState === 'visible' && !isCameraRunning) {
-                startCamera(currentFacingMode).catch(console.error);
+                startCamera(currentFacingMode);
             } else if (document.visibilityState === 'hidden') {
                 if (currentStream) {
                     currentStream.getTracks().forEach(track => track.stop());
@@ -950,11 +957,11 @@
                 <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
             </svg>
         `;
-        toggleFullscreenButton.addEventListener('click', async () => {
-            if (fullscreenUtils.isFullscreen()) {
-                await fullscreenUtils.exitFullscreen();
+        toggleFullscreenButton.addEventListener('click', () => {
+            if (document.fullscreenElement) {
+                document.exitFullscreen().catch(console.error);
             } else {
-                await fullscreenUtils.enterFullscreen();
+                document.documentElement.requestFullscreen().catch(console.error);
             }
         });
 
@@ -1169,7 +1176,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.3.7');
+        console.log('Camera App v1.3.8');
     </script>
 </body>
 </html>

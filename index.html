@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.3.1');</script>
+    <script>console.log('Camera App v1.3.2');</script>
     <style>
         * {
             margin: 0;
@@ -625,7 +625,7 @@
             }
         }
 
-        // Update startCamera function with more logging
+        // Enhanced camera initialization with better error handling
         async function startCamera(facingMode = 'environment') {
             try {
                 console.log('Starting camera with facing mode:', facingMode);
@@ -633,12 +633,6 @@
                 
                 if (!video) {
                     throw new Error('Video element not found');
-                }
-
-                // Check camera access first
-                const accessStream = await checkCameraAccess();
-                if (!accessStream) {
-                    throw new Error('Could not access camera');
                 }
 
                 // Stop any existing streams
@@ -650,10 +644,9 @@
                 // Request camera with specific constraints
                 const constraints = {
                     video: {
-                        facingMode: facingMode,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
+                        facingMode: facingMode
+                    },
+                    audio: false
                 };
 
                 console.log('Requesting camera with constraints:', constraints);
@@ -663,14 +656,6 @@
                 video.srcObject = stream;
                 currentStream = stream;
                 currentFacingMode = facingMode;
-
-                // Log video element state
-                console.log('Video element state:', {
-                    videoWidth: video.videoWidth,
-                    videoHeight: video.videoHeight,
-                    readyState: video.readyState,
-                    paused: video.paused
-                });
 
                 // Wait for video to be ready
                 await new Promise((resolve) => {
@@ -684,18 +669,55 @@
                 console.log('Video playback started');
 
             } catch (err) {
-                console.error('Detailed camera error:', err);
-                alert('Camera error: ' + err.message);
+                console.error('Camera initialization error:', err);
+                // Retry camera access after a short delay
+                setTimeout(async () => {
+                    try {
+                        console.log('Retrying camera access...');
+                        await startCamera(facingMode);
+                    } catch (retryError) {
+                        console.error('Camera retry failed:', retryError);
+                        alert('Camera access failed. Please check permissions and refresh the page.');
+                    }
+                }, 1000);
             }
         }
 
-        // Initialize on page load with debug info
+        // Initialize camera on page load
         document.addEventListener('DOMContentLoaded', async () => {
             console.log('DOM loaded, initializing camera...');
             try {
                 await startCamera();
             } catch (error) {
-                console.error('Camera initialization failed:', error);
+                console.error('Initial camera start failed:', error);
+            }
+        });
+
+        // Handle visibility changes
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                console.log('Page became visible, restarting camera');
+                try {
+                    await startCamera(currentFacingMode);
+                } catch (error) {
+                    console.error('Error resuming camera:', error);
+                }
+            } else {
+                console.log('Page hidden, stopping camera');
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+            }
+        });
+
+        // Handle orientation changes
+        window.addEventListener('orientationchange', async () => {
+            console.log('Orientation changed, restarting camera');
+            await new Promise(resolve => setTimeout(resolve, 100));
+            try {
+                await startCamera(currentFacingMode);
+            } catch (error) {
+                console.error('Error handling orientation change:', error);
             }
         });
 
@@ -722,49 +744,6 @@
             }
         `;
         document.head.appendChild(cameraStyles);
-
-        // Enhanced camera initialization with proper error handling
-        async function startCamera(facingMode = 'environment') {
-            try {
-                // First check and request permissions explicitly
-                const permissions = await navigator.permissions.query({ name: 'camera' });
-                if (permissions.state === 'denied') {
-                    throw new Error('Camera permission was denied. Please enable camera access in your browser settings.');
-                }
-
-                const video = document.getElementById('camera');
-                if (!video) {
-                    throw new Error('Video element not found');
-                }
-
-                // Clear any existing streams
-                if (currentStream) {
-                    currentStream.getTracks().forEach(track => track.stop());
-                }
-
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: facingMode,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                });
-
-                video.srcObject = stream;
-                currentStream = stream;
-                currentFacingMode = facingMode;
-
-                await new Promise((resolve) => {
-                    video.onloadedmetadata = resolve;
-                });
-
-                await video.play();
-
-            } catch (err) {
-                console.error('Camera initialization error:', err);
-                alert('Please grant camera permissions and refresh the page. Error: ' + err.message);
-            }
-        }
 
         // Orientation handling
         function updateVideoOrientation() {
@@ -852,31 +831,6 @@
         window.addEventListener('beforeunload', () => {
             if (currentStream) {
                 utils.cleanupMediaStream(currentStream);
-            }
-        });
-
-        // Handle visibility changes
-        document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible') {
-                try {
-                    await startCamera(currentFacingMode);
-                } catch (error) {
-                    utils.handleError(error, 'Error resuming camera');
-                }
-            } else {
-                if (currentStream) {
-                    utils.cleanupMediaStream(currentStream);
-                }
-            }
-        });
-
-        // Handle orientation changes
-        window.addEventListener('orientationchange', async () => {
-            await new Promise(resolve => setTimeout(resolve, 100));
-            try {
-                await startCamera(currentFacingMode);
-            } catch (error) {
-                utils.handleError(error, 'Error handling orientation change');
             }
         });
 
@@ -1209,7 +1163,7 @@
         document.head.appendChild(buttonStyles);
 
         
-        console.log('Camera App v1.3.1');
+        console.log('Camera App v1.3.2');
     </script>
 </body>
 </html>

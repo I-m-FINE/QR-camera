@@ -355,6 +355,58 @@
             }
         };
 
+        // Add zoom control initialization
+        function initializeZoomControls() {
+            const video = document.getElementById('camera');
+            const zoomSlider = document.getElementById('zoomSlider');
+            
+            // Check if zoom is supported
+            async function checkZoomSupport() {
+                if (!currentStream) return false;
+                const videoTrack = currentStream.getVideoTracks()[0];
+                const capabilities = videoTrack.getCapabilities();
+                return capabilities && capabilities.zoom;
+            }
+
+            // Initialize zoom controls
+            async function setupZoomControls() {
+                try {
+                    const hasZoom = await checkZoomSupport();
+                    if (!hasZoom) {
+                        document.querySelector('.zoom-controls').style.display = 'none';
+                        return;
+                    }
+
+                    const videoTrack = currentStream.getVideoTracks()[0];
+                    const capabilities = videoTrack.getCapabilities();
+                    
+                    // Set slider range based on capabilities
+                    zoomSlider.min = capabilities.zoom.min;
+                    zoomSlider.max = capabilities.zoom.max;
+                    zoomSlider.step = (capabilities.zoom.max - capabilities.zoom.min) / 100;
+                    zoomSlider.value = 1;
+
+                    // Add zoom event listener
+                    zoomSlider.addEventListener('input', (e) => {
+                        const zoomLevel = parseFloat(e.target.value);
+                        videoTrack.applyConstraints({
+                            advanced: [{ zoom: zoomLevel }]
+                        });
+                    });
+
+                    // Show zoom controls
+                    document.querySelector('.zoom-controls').style.display = 'flex';
+
+                } catch (error) {
+                    console.log('Zoom controls not supported:', error);
+                    document.querySelector('.zoom-controls').style.display = 'none';
+                }
+            }
+
+            // Initialize when camera starts
+            setupZoomControls();
+        }
+
         // Enhanced startCamera function
         async function startCamera(facingMode = 'environment') {
             try {
@@ -423,10 +475,16 @@
                     await fullscreenUtils.enterFullscreen();
                 }
 
+                // Initialize zoom controls after camera starts
+                initializeZoomControls();
+
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
                         video.play()
-                            .then(resolve)
+                            .then(() => {
+                                initializeZoomControls(); // Initialize zoom after video plays
+                                resolve();
+                            })
                             .catch(error => {
                                 utils.handleError(error, 'Error playing video');
                                 resolve();
@@ -775,6 +833,16 @@
 
         // Add the button to your button container
         document.querySelector('.button-container').appendChild(toggleFullscreenButton);
+
+        // Add zoom controls HTML if not already present
+        if (!document.querySelector('.zoom-controls')) {
+            const zoomControls = document.createElement('div');
+            zoomControls.className = 'zoom-controls';
+            zoomControls.innerHTML = `
+                <input type="range" id="zoomSlider" min="1" max="5" step="0.1" value="1">
+            `;
+            document.querySelector('.camera-container').appendChild(zoomControls);
+        }
     </script>
 </body>
 </html>

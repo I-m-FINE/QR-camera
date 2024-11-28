@@ -983,6 +983,7 @@
             }
         });
 
+        // Optimized upload handler
         document.getElementById('upload').addEventListener('click', async () => {
             if (typeof uploadToDrive === 'undefined') {
                 showStatus('Upload functionality not ready. Please try again.', 5000);
@@ -993,9 +994,88 @@
                 const uploadBtn = document.getElementById('upload');
                 uploadBtn.disabled = true;
                 uploadBtn.classList.add('loading');
+                
                 try {
-                    await uploadToDrive(imageBlob || videoBlob, videoBlob ? 'video' : 'image');
-                    showStatus(`${videoBlob ? 'Video' : 'Photo'} uploaded successfully!`);
+                    // Show upload progress
+                    showStatus('Starting upload...');
+                    
+                    // Optimize image if it's a photo
+                    if (imageBlob) {
+                        // Create a web worker for image processing
+                        const workerBlob = new Blob([`
+                            self.onmessage = async function(e) {
+                                const { blob, maxWidth, maxHeight } = e.data;
+                                
+                                // Create image bitmap
+                                const imageBitmap = await createImageBitmap(blob);
+                                
+                                // Calculate new dimensions
+                                let width = imageBitmap.width;
+                                let height = imageBitmap.height;
+                                
+                                if (width > maxWidth) {
+                                    height = (height * maxWidth) / width;
+                                    width = maxWidth;
+                                }
+                                
+                                if (height > maxHeight) {
+                                    width = (width * maxHeight) / height;
+                                    height = maxHeight;
+                                }
+                                
+                                // Create canvas and draw image
+                                const canvas = new OffscreenCanvas(width, height);
+                                const ctx = canvas.getContext('2d');
+                                ctx.drawImage(imageBitmap, 0, 0, width, height);
+                                
+                                // Convert to blob
+                                const newBlob = await canvas.convertToBlob({
+                                    type: 'image/jpeg',
+                                    quality: 0.92
+                                });
+                                
+                                self.postMessage({ blob: newBlob });
+                            };
+                        `], { type: 'application/javascript' });
+                        
+                        const worker = new Worker(URL.createObjectURL(workerBlob));
+                        
+                        const optimizedBlob = await new Promise((resolve) => {
+                            worker.onmessage = (e) => resolve(e.data.blob);
+                            worker.postMessage({
+                                blob: imageBlob,
+                                maxWidth: 4096,  // Max width while maintaining quality
+                                maxHeight: 4096  // Max height while maintaining quality
+                            });
+                        });
+                        
+                        worker.terminate();
+                        URL.revokeObjectURL(workerBlob);
+                        
+                        await uploadToDrive(optimizedBlob, 'image');
+                    } else if (videoBlob) {
+                        // For video, use chunks to upload
+                        const chunkSize = 1024 * 1024; // 1MB chunks
+                        const totalChunks = Math.ceil(videoBlob.size / chunkSize);
+                        
+                        for (let i = 0; i < totalChunks; i++) {
+                            const start = i * chunkSize;
+                            const end = Math.min(start + chunkSize, videoBlob.size);
+                            const chunk = videoBlob.slice(start, end);
+                            
+                            await uploadToDrive(chunk, 'video', {
+                                isChunk: true,
+                                chunkIndex: i,
+                                totalChunks: totalChunks
+                            });
+                            
+                            // Update progress
+                            const progress = Math.round(((i + 1) / totalChunks) * 100);
+                            showStatus(`Uploading: ${progress}%`);
+                        }
+                    }
+                    
+                    showStatus('Upload complete!');
                     uploadBtn.textContent = 'Upload to Drive';
                     uploadBtn.style.display = 'none';
                     
@@ -1012,19 +1092,12 @@
                     videoBlob = null;
                     recordedChunks = [];
                     
-                    // Stop current stream before restarting
-                    const video = document.getElementById('camera');
-                    if (video.srcObject) {
-                        video.srcObject.getTracks().forEach(track => track.stop());
-                    }
-                    
-                    // Small delay before restarting camera
+                    // Restart camera
                     setTimeout(async () => {
                         try {
                             await startCamera(currentFacingMode);
                         } catch (error) {
                             console.error('Error restarting camera:', error);
-                            showStatus('Error restarting camera. Please refresh the page.', 5000);
                         }
                     }, 100);
                     

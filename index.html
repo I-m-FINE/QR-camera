@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.4.8');</script>
+    <script>console.log('Camera App v1.4.9');</script>
     <style>
         * {
             margin: 0;
@@ -1196,7 +1196,7 @@
                     }
 
                     .ios-sign-in-btn {
-                        display: inline-block;
+                        display: block;
                         background: #4285f4;
                         color: white;
                         font-size: 16px;
@@ -1207,22 +1207,32 @@
                         box-sizing: border-box;
                         font-weight: bold;
                         -webkit-appearance: none;
+                        -webkit-tap-highlight-color: transparent;
+                        touch-action: manipulation;
+                        user-select: none;
+                        -webkit-user-select: none;
                         cursor: pointer;
                         text-decoration: none;
+                        margin: 0 auto;
                     }
                 </style>
                 <div class="ios-login-box">
                     <div class="ios-login-title">Sign in Required</div>
                     <div class="ios-login-text">To enable automatic upload of photos and videos, please sign in with your Google account.</div>
-                    <button class="ios-sign-in-btn" id="iosSignInButton">Sign in with Google</button>
+                    <a href="#" class="ios-sign-in-btn" id="iosSignInButton">Sign in with Google</a>
                 </div>
             `;
 
             // Add to body
             document.body.appendChild(container);
 
-            // Add click handler using onclick for maximum compatibility
-            document.getElementById('iosSignInButton').onclick = function() {
+            // Add multiple event listeners for maximum compatibility
+            const signInButton = document.getElementById('iosSignInButton');
+            
+            const handleSignIn = (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                
                 const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
                     `client_id=${YOUR_CLIENT_ID}` +
                     `&redirect_uri=${encodeURIComponent(window.location.origin)}` +
@@ -1230,10 +1240,14 @@
                     `&scope=https://www.googleapis.com/auth/drive.file` +
                     `&prompt=consent`;
                 
-                // Redirect to auth URL
                 window.location.href = authUrl;
                 return false;
             };
+
+            // Add multiple event listeners
+            signInButton.onclick = handleSignIn;
+            signInButton.addEventListener('click', handleSignIn);
+            signInButton.addEventListener('touchend', handleSignIn);
         }
 
         // Force check auth status more frequently for iOS
@@ -1275,7 +1289,7 @@
         }
 
         // Update version
-        console.log('Camera App v1.4.8');
+        console.log('Camera App v1.4.9');
     </script>
 </body>
 </html>

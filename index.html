@@ -50,6 +50,7 @@
             align-items: center;
             justify-content: center;
             position: relative;
+            overflow: hidden !important;
         }
 
         #camera {
@@ -59,6 +60,8 @@
             border-radius: 16px;
             background-color: #2a2a2a;
             box-shadow: 0 8px 16px rgba(0,0,0,0.3);
+            transform-origin: center;
+            transition: transform 0.2s ease-out;
         }
 
         .button-container {
@@ -173,8 +176,7 @@
             }
         }
 
-        /* Existing animations and other styles remain the same */
-
+        /* Zoom controls */
         .zoom-controls {
             position: absolute;
             bottom: 20px;
@@ -223,15 +225,6 @@
                 transform: translateY(50%);
             }
         }
-
-        .camera-container {
-            overflow: hidden !important;
-        }
-        
-        #camera {
-            transform-origin: center;
-            transition: transform 0.2s ease-out;
-        }
     </style>
 </head>
 <body>
@@ -278,56 +271,66 @@
                     video.srcObject.getTracks().forEach(track => track.stop());
                 }
 
-                // First request audio separately to ensure it's available
+                // Check if device is iOS
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                
+                // Configure audio constraints based on device
+                const audioConstraints = {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true,
+                    // iOS sometimes needs these specific constraints
+                    sampleRate: 44100,
+                    sampleSize: 16
+                };
+
+                // First request audio
                 let audioStream;
                 try {
                     audioStream = await navigator.mediaDevices.getUserMedia({ 
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        }
+                        audio: audioConstraints
                     });
                 } catch (audioErr) {
                     console.error('Audio access error:', audioErr);
                     showStatus('Unable to access microphone. Audio will not be recorded.', 5000);
                 }
 
-                // Then get video stream
+                // Configure video constraints based on device
+                const videoConstraints = {
+                    facingMode: facingMode,
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 }
+                };
+
+                // Some devices work better with these constraints
+                if (isIOS) {
+                    videoConstraints.width = { min: 640, ideal: 1920, max: 1920 };
+                    videoConstraints.height = { min: 480, ideal: 1080, max: 1080 };
+                }
+
                 const videoStream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: facingMode,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
+                    video: videoConstraints
                 });
 
-                // Combine audio and video tracks
+                // Combine streams
                 const tracks = [...videoStream.getTracks()];
                 if (audioStream) {
                     tracks.push(...audioStream.getTracks());
                 }
                 
-                // Create a new MediaStream with both audio and video tracks
                 const combinedStream = new MediaStream(tracks);
                 video.srcObject = combinedStream;
                 currentStream = combinedStream;
                 currentFacingMode = facingMode;
 
-                // Verify audio track exists
-                const hasAudio = combinedStream.getAudioTracks().length > 0;
-                console.log('Audio track available:', hasAudio);
-                if (!hasAudio) {
-                    showStatus('No audio track available. Video will be silent.', 5000);
+                // Log device information
+                const videoTrack = videoStream.getVideoTracks()[0];
+                console.log('Using device:', videoTrack.label);
+                console.log('Video constraints:', videoTrack.getConstraints());
+                if (audioStream) {
+                    const audioTrack = audioStream.getAudioTracks()[0];
+                    console.log('Using audio device:', audioTrack.label);
                 }
-
-                // Show zoom controls
-                document.querySelector('.zoom-controls').style.display = 'flex';
-                
-                // Initialize zoom slider
-                const zoomSlider = document.getElementById('zoomSlider');
-                zoomSlider.value = 1;
-                document.getElementById('zoomLevel').textContent = '1x';
 
                 return new Promise((resolve) => {
                     video.onloadedmetadata = () => {
@@ -346,21 +349,21 @@
             }
         }
 
-        // Prevent screen rotation on iOS
+        // Add device-specific event handlers
+        document.addEventListener('visibilitychange', async () => {
+            if (document.visibilityState === 'visible') {
+                // Restart camera when app comes back to foreground
+                await startCamera(currentFacingMode);
+            }
+        });
+
+        // Prevent screen rotation issues
         window.addEventListener('orientationchange', async () => {
             // Wait for orientation change to complete
             await new Promise(resolve => setTimeout(resolve, 100));
             
             // Restart camera to adjust to new orientation
             if (document.getElementById('camera').srcObject) {
-                await startCamera(currentFacingMode);
-            }
-        });
-
-        // Handle iOS specific issues
-        document.addEventListener('visibilitychange', async () => {
-            if (document.visibilityState === 'visible') {
-                // Restart camera when app comes back to foreground
                 await startCamera(currentFacingMode);
             }
         });

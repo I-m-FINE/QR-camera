@@ -1295,6 +1295,111 @@
                 }, 100);
             });
         }
+
+        // Original working camera initialization
+        async function startCamera(facingMode = 'environment') {
+            try {
+                const video = document.getElementById('camera');
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
+                    }
+                };
+
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = stream;
+                currentStream = stream;
+                currentFacingMode = facingMode;
+
+                // Device specific transforms
+                if (facingMode === 'user') {
+                    video.style.transform = isIOS ? 'scaleX(-1)' : 'scaleX(-1)';
+                } else {
+                    video.style.transform = 'none';
+                }
+
+                await video.play();
+
+            } catch (err) {
+                console.error('Camera error:', err);
+                alert('Camera error: ' + (err.message || 'Please check permissions'));
+            }
+        }
+
+        // Add only the iOS control positioning styles
+        const controlStyles = document.createElement('style');
+        controlStyles.setAttribute('data-purpose', 'control-styles');
+        controlStyles.textContent = `
+            /* Base controls */
+            .button-container {
+                position: fixed;
+                z-index: 1000;
+                display: flex;
+                gap: 20px;
+            }
+
+            .zoom-controls {
+                position: fixed;
+                z-index: 1000;
+                background: rgba(0, 0, 0, 0.5);
+                padding: 8px 12px;
+                border-radius: 20px;
+            }
+
+            /* Portrait layout */
+            @media (orientation: portrait) {
+                .button-container {
+                    bottom: max(30px, env(safe-area-inset-bottom));
+                    left: 0;
+                    right: 0;
+                    justify-content: center;
+                }
+
+                .zoom-controls {
+                    bottom: 120px;
+                    left: 50%;
+                    transform: translateX(-50%);
+                }
+            }
+
+            /* Landscape layout */
+            @media (orientation: landscape) {
+                .ios-device .button-container {
+                    right: max(30px, env(safe-area-inset-right));
+                    top: 50%;
+                    transform: translateY(-50%);
+                    flex-direction: column;
+                }
+
+                .ios-device .zoom-controls {
+                    right: 100px;
+                    top: 50%;
+                    transform: translateY(-50%);
+                }
+            }
+        `;
+        document.head.appendChild(controlStyles);
+
+        // Simple iOS detection
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        if (isIOS) {
+            document.body.classList.add('ios-device');
+        }
+
+        // Initialize camera on page load
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                await startCamera();
+            } catch (error) {
+                console.error('Failed to start camera:', error);
+            }
+        });
     </script>
 </body>
 </html>

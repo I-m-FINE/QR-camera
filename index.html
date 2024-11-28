@@ -466,67 +466,85 @@
             setupZoomControls();
         }
 
-        // Basic camera initialization that works across devices
+        // Basic camera initialization
         async function startCamera(facingMode = 'environment') {
+            const video = document.getElementById('camera');
+            
             try {
-                const video = document.getElementById('camera');
-                
-                // Cleanup existing stream
+                // Stop any existing stream
                 if (video.srcObject) {
                     video.srcObject.getTracks().forEach(track => track.stop());
                 }
 
-                // Basic video constraints
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: facingMode,
-                        width: { ideal: 1920 },
-                        height: { ideal: 1080 }
-                    }
-                });
+                // Request camera with basic constraints
+                const constraints = {
+                    video: { facingMode: facingMode },
+                    audio: false
+                };
 
+                console.log('Requesting camera with constraints:', constraints);
+                
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                console.log('Got media stream:', stream);
+
+                // Attach stream to video element
                 video.srcObject = stream;
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
-                // Basic orientation handling
-                function updateVideoOrientation() {
-                    const isLandscape = window.matchMedia("(orientation: landscape)").matches;
-                    
-                    if (facingMode === 'user') {
-                        if (isLandscape) {
-                            video.style.transform = 'scale(-1, 1) rotate(270deg)';
-                        } else {
-                            video.style.transform = 'scale(-1, 1)';
-                        }
-                    } else {
-                        video.style.transform = 'none';
+                // Play video
+                video.onloadedmetadata = async () => {
+                    try {
+                        await video.play();
+                        console.log('Video playing');
+                    } catch (e) {
+                        console.error('Error playing video:', e);
                     }
-                }
-
-                // Update orientation initially and on changes
-                updateVideoOrientation();
-                window.addEventListener('orientationchange', () => {
-                    setTimeout(updateVideoOrientation, 100);
-                });
-
-                // Ensure video plays
-                await video.play();
+                };
 
             } catch (err) {
-                console.error('Camera error:', err);
-                alert('Camera access error: ' + err.message);
+                console.error('Camera access error:', err);
+                alert('Camera error: ' + err.message);
             }
         }
 
-        // Remove any existing style elements with the same purpose
-        const existingStyles = document.querySelectorAll('style[data-purpose="camera-styles"]');
-        existingStyles.forEach(style => style.remove());
+        // Make sure video element exists and has correct attributes
+        document.addEventListener('DOMContentLoaded', () => {
+            const container = document.querySelector('.camera-container');
+            if (!container) {
+                console.error('Camera container not found');
+                return;
+            }
 
-        // Create new style element with identifier
+            // Ensure video element exists with correct attributes
+            let video = document.getElementById('camera');
+            if (!video) {
+                video = document.createElement('video');
+                video.id = 'camera';
+                video.setAttribute('playsinline', ''); // Important for iOS
+                video.setAttribute('autoplay', '');
+                video.setAttribute('muted', '');
+                container.appendChild(video);
+            }
+
+            // Start camera
+            startCamera().catch(err => {
+                console.error('Failed to start camera:', err);
+            });
+        });
+
+        // Add basic styles
         const cameraStyles = document.createElement('style');
-        cameraStyles.setAttribute('data-purpose', 'camera-styles');
         cameraStyles.textContent = `
+            #camera {
+                width: 100%;
+                height: 100%;
+                object-fit: cover;
+                position: absolute;
+                top: 0;
+                left: 0;
+            }
+
             .camera-container {
                 width: 100vw;
                 height: 100vh;
@@ -534,59 +552,7 @@
                 top: 0;
                 left: 0;
                 background: #000;
-            }
-
-            #camera {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-
-            .button-container {
-                position: fixed;
-                z-index: 1000;
-                display: flex;
-                gap: 20px;
-            }
-
-            .zoom-controls {
-                position: fixed;
-                z-index: 1000;
-                background: rgba(0, 0, 0, 0.5);
-                padding: 8px 12px;
-                border-radius: 20px;
-            }
-
-            /* Portrait layout */
-            @media (orientation: portrait) {
-                .button-container {
-                    bottom: max(30px, env(safe-area-inset-bottom));
-                    left: 0;
-                    right: 0;
-                    justify-content: center;
-                }
-
-                .zoom-controls {
-                    bottom: 120px;
-                    left: 50%;
-                    transform: translateX(-50%);
-                }
-            }
-
-            /* Landscape layout */
-            @media (orientation: landscape) {
-                .button-container {
-                    right: max(30px, env(safe-area-inset-right));
-                    top: 50%;
-                    transform: translateY(-50%);
-                    flex-direction: column;
-                }
-
-                .zoom-controls {
-                    right: 100px;
-                    top: 50%;
-                    transform: translateY(-50%);
-                }
+                overflow: hidden;
             }
         `;
         document.head.appendChild(cameraStyles);

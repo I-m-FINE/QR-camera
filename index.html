@@ -9,23 +9,29 @@
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
     <style>
-        /* Essential camera styles */
+        /* Cross-browser reset */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
         }
 
+        /* Device-specific body styles */
         body {
             background-color: #000;
             height: 100vh;
+            height: -webkit-fill-available; /* iOS height fix */
             width: 100vw;
             overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
         }
 
+        /* Container with iOS safe area support */
         .container {
             width: 100%;
             height: 100%;
+            padding: env(safe-area-inset-top) env(safe-area-inset-right) env(safe-area-inset-bottom) env(safe-area-inset-left);
             position: relative;
         }
 
@@ -37,6 +43,7 @@
             background-color: #000;
         }
 
+        /* Cross-browser video element styles */
         #camera {
             width: 100%;
             height: 100%;
@@ -44,12 +51,14 @@
             position: absolute;
             top: 0;
             left: 0;
+            -webkit-transform: scaleX(1); /* iOS mirror fix */
+            transform: scaleX(1);
         }
 
-        /* Updated button container styles */
+        /* Button container with safe area consideration */
         .button-container {
             position: fixed;
-            bottom: 30px;
+            bottom: max(30px, env(safe-area-inset-bottom));
             left: 0;
             right: 0;
             display: flex;
@@ -60,7 +69,7 @@
             background: linear-gradient(to top, rgba(0,0,0,0.3), transparent);
         }
 
-        /* Updated button styles */
+        /* Cross-browser button styles */
         .button {
             background: rgba(0, 0, 0, 0.5);
             border: none;
@@ -74,6 +83,8 @@
             cursor: pointer;
             margin: 0 10px;
             z-index: 1001;
+            -webkit-appearance: none; /* iOS button fix */
+            touch-action: manipulation; /* Better touch handling */
         }
 
         #capture {
@@ -83,17 +94,10 @@
             border: 3px solid rgba(255,255,255,0.8);
         }
 
-        /* Ensure SVG icons are visible */
-        .button svg {
-            width: 24px;
-            height: 24px;
-            fill: currentColor;
-        }
-
-        /* Zoom controls */
+        /* Zoom controls with device consideration */
         .zoom-controls {
             position: fixed;
-            bottom: 30px;
+            bottom: max(30px, env(safe-area-inset-bottom));
             left: 20px;
             z-index: 1000;
             display: flex;
@@ -101,6 +105,53 @@
             background: rgba(0, 0, 0, 0.5);
             padding: 8px;
             border-radius: 20px;
+            touch-action: manipulation;
+        }
+
+        /* Cross-browser input styles */
+        #zoomSlider {
+            -webkit-appearance: none;
+            width: 100px;
+            height: 3px;
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 1.5px;
+            margin: 0 8px;
+        }
+
+        #zoomSlider::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+        }
+
+        #zoomSlider::-moz-range-thumb {
+            width: 20px;
+            height: 20px;
+            background: white;
+            border-radius: 50%;
+            border: none;
+        }
+
+        /* Device-specific media queries */
+        @media screen and (orientation: landscape) {
+            .button-container {
+                right: env(safe-area-inset-right);
+                padding-right: max(20px, env(safe-area-inset-right));
+            }
+            
+            .zoom-controls {
+                left: max(20px, env(safe-area-inset-left));
+            }
+        }
+
+        /* Desktop specific styles */
+        @media (min-width: 1024px) {
+            .container {
+                max-width: 1024px;
+                margin: 0 auto;
+            }
         }
     </style>
 </head>
@@ -133,48 +184,70 @@
     </div>
 
     <script>
+        // Device detection
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+        const isAndroid = /Android/.test(navigator.userAgent);
+        const isMobile = isIOS || isAndroid;
+        
         let currentFacingMode = 'environment';
         let currentStream = null;
 
+        // Enhanced startCamera function
         async function startCamera(facingMode = 'environment') {
             try {
                 const video = document.getElementById('camera');
                 
-                // Cleanup existing stream
+                // Device specific constraints
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: isMobile ? 1920 : 1280 },
+                        height: { ideal: isMobile ? 1080 : 720 }
+                    }
+                };
+
                 if (currentStream) {
                     currentStream.getTracks().forEach(track => track.stop());
                 }
 
-                // Request camera access
-                const stream = await navigator.mediaDevices.getUserMedia({
-                    video: {
-                        facingMode: facingMode
-                    }
-                });
-
-                // Set up video stream
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
-                // Mirror front camera
-                video.style.transform = facingMode === 'user' ? 'scale(-1, 1)' : 'none';
+                // Device specific transforms
+                if (facingMode === 'user') {
+                    video.style.transform = isIOS ? 'scaleX(-1)' : 'scaleX(-1)';
+                } else {
+                    video.style.transform = 'none';
+                }
 
-                // Ensure video plays
                 await video.play();
 
             } catch (err) {
-                console.error('Error accessing camera:', err);
-                alert('Error accessing camera. Please check permissions.');
+                console.error('Camera error:', err);
+                alert('Camera error: ' + (err.message || 'Please check permissions'));
             }
         }
 
-        // Initialize camera on page load
-        document.addEventListener('DOMContentLoaded', () => {
-            startCamera().catch(err => {
-                console.error('Failed to start camera:', err);
-            });
+        // Enhanced initialization
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                // Add device specific classes
+                if (isIOS) document.body.classList.add('ios-device');
+                if (isAndroid) document.body.classList.add('android-device');
+                if (!isMobile) document.body.classList.add('desktop-device');
+
+                await startCamera();
+            } catch (err) {
+                console.error('Initialization failed:', err);
+            }
         });
+
+        // Prevent bounce scrolling on iOS
+        document.body.addEventListener('touchmove', (e) => {
+            if (isIOS) e.preventDefault();
+        }, { passive: false });
 
         // Handle camera switch
         document.getElementById('switchCamera').addEventListener('click', () => {

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.3');</script>
+    <script>console.log('Camera App v1.0.4');</script>
     <style>
         /* Reset default styles */
         * {
@@ -22,7 +22,7 @@
             outline: none !important;
         }
 
-        /* Button container with zoom controls */
+        /* Button container */
         .button-container {
             position: fixed;
             bottom: 30px;
@@ -37,12 +37,12 @@
             background: transparent;
         }
 
-        /* Zoom controls positioning - next to camera buttons */
+        /* Zoom controls positioning - consistently to the left */
         .zoom-controls {
             position: fixed;
-            bottom: 120px; /* Position above the camera buttons */
-            left: 50%;
-            transform: translateX(-50%);
+            bottom: 50%;
+            right: 120px; /* Position to the left of camera buttons */
+            transform: translateY(50%);
             display: flex;
             flex-direction: column;
             gap: 10px;
@@ -53,12 +53,14 @@
             backdrop-filter: blur(5px);
         }
 
-        #zoomLevel {
-            color: white;
-            text-align: center;
-            font-size: 14px;
-            margin: 5px 0;
-            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        /* Portrait mode specific adjustments */
+        @media screen and (orientation: portrait) {
+            .zoom-controls {
+                right: auto;
+                left: calc(50% - 120px); /* Position relative to center */
+                bottom: 45px; /* Align with camera buttons */
+                transform: translateY(0);
+            }
         }
 
         /* Landscape mode adjustments */
@@ -73,11 +75,9 @@
             }
 
             .zoom-controls {
-                bottom: auto;
-                right: 120px; /* Position to the left of camera buttons */
-                left: auto;
-                top: 50%;
-                transform: translateY(-50%);
+                bottom: 50%;
+                right: 120px;
+                transform: translateY(50%);
             }
         }
 
@@ -735,7 +735,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.3');
+        console.log('Camera App v1.0.4');
     </script>
 </body>
 </html>

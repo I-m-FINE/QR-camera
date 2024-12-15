@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-05');</script>
+    <script>console.log('Camera App v1.0.5-06');</script>
     <style>
         /* Reset default styles */
         * {
@@ -809,44 +809,54 @@
                     }
                     
                     try {
-                        const form = new FormData();
-                        const metadata = {
+                        // Upload to main folder
+                        showStatusMessage('Uploading to main folder...');
+                        const mainForm = new FormData();
+                        const mainMetadata = {
                             name: `photo_${new Date().toISOString()}.jpg`,
                             mimeType: 'image/jpeg',
                             parents: ['1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB']
                         };
                         
-                        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-                        form.append('file', blob);
+                        mainForm.append('metadata', new Blob([JSON.stringify(mainMetadata)], { type: 'application/json' }));
+                        mainForm.append('file', blob);
 
-                        showStatusMessage('Uploading to Drive...');
-                        
                         const token = localStorage.getItem('googleToken');
-                        if (!token) {
-                            throw new Error('No auth token found');
-                        }
+                        if (!token) throw new Error('No auth token found');
 
-                        const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                        const mainResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                             method: 'POST',
                             headers: { 'Authorization': `Bearer ${token}` },
-                            body: form
+                            body: mainForm
                         });
 
-                        if (!response.ok) {
-                            throw new Error(`Upload failed: ${response.status} ${response.statusText}`);
-                        }
+                        if (!mainResponse.ok) throw new Error('Main folder upload failed');
 
-                        const result = await response.json();
-                        console.log('Upload successful:', result);
+                        // Upload to backup folder
+                        showStatusMessage('Uploading to backup folder...');
+                        const backupForm = new FormData();
+                        const backupMetadata = {
+                            name: `photo_${new Date().toISOString()}_backup.jpg`,
+                            mimeType: 'image/jpeg',
+                            parents: ['1vsvYXG3w_nnJOp845et41CJWrRP4iFHF']
+                        };
+                        
+                        backupForm.append('metadata', new Blob([JSON.stringify(backupMetadata)], { type: 'application/json' }));
+                        backupForm.append('file', blob);
+
+                        const backupResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${token}` },
+                            body: backupForm
+                        });
+
+                        if (!backupResponse.ok) throw new Error('Backup folder upload failed');
+
                         showStatusMessage('✓ Photo uploaded successfully', 2000);
-
-                        if (isIOS && navigator.vibrate) {
-                            navigator.vibrate(200);
-                        }
+                        if (isIOS && navigator.vibrate) navigator.vibrate(200);
                     } catch (error) {
                         console.error('Upload error:', error);
                         if (error.message.includes('401') || error.message.includes('403')) {
-                            // Only clear token if it's an authentication error
                             localStorage.removeItem('googleToken');
                             await handleIOSAuth();
                             showStatusMessage('Please try capturing again', 2000);
@@ -888,13 +898,17 @@
                     if (isIOS) {
                         // iOS specific recording options
                         options = {
-                            mimeType: 'video/mp4',
+                            mimeType: 'video/mp4;codecs=h264',
                             videoBitsPerSecond: 2000000,
                             audioBitsPerSecond: 128000
                         };
                         
                         if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                            options.mimeType = 'video/webm';
+                            options = {
+                                mimeType: 'video/webm;codecs=h264',
+                                videoBitsPerSecond: 2000000,
+                                audioBitsPerSecond: 128000
+                            };
                         }
                     } else {
                         options = {
@@ -905,9 +919,11 @@
                     }
 
                     globals.mediaRecorder = new MediaRecorder(stream, options);
+                    console.log('MediaRecorder created with options:', options);
 
                     globals.mediaRecorder.ondataavailable = (event) => {
-                        if (event.data.size > 0) {
+                        if (event.data && event.data.size > 0) {
+                            console.log('Received chunk of size:', event.data.size);
                             globals.recordedChunks.push(event.data);
                         }
                     };
@@ -917,24 +933,70 @@
                         try {
                             const mimeType = isIOS ? 'video/mp4' : 'video/webm';
                             const blob = new Blob(globals.recordedChunks, { type: mimeType });
-                            await window.uploadToDrive(blob, 'video');
-                            showStatusMessage('Video uploaded successfully', 2000);
+                            console.log('Video blob created, size:', blob.size);
+
+                            // Upload to main folder
+                            showStatusMessage('Uploading to main folder...');
+                            const mainForm = new FormData();
+                            const mainMetadata = {
+                                name: `video_${new Date().toISOString()}.${isIOS ? 'mp4' : 'webm'}`,
+                                mimeType: mimeType,
+                                parents: ['1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'] // Main folder ID
+                            };
+                            
+                            mainForm.append('metadata', new Blob([JSON.stringify(mainMetadata)], { type: 'application/json' }));
+                            mainForm.append('file', blob);
+
+                            const token = localStorage.getItem('googleToken');
+                            if (!token) throw new Error('No auth token found');
+
+                            const mainResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` },
+                                body: mainForm
+                            });
+
+                            if (!mainResponse.ok) throw new Error('Main folder upload failed');
+                            
+                            // Upload to backup folder
+                            showStatusMessage('Uploading to backup folder...');
+                            const backupForm = new FormData();
+                            const backupMetadata = {
+                                name: `video_${new Date().toISOString()}_backup.${isIOS ? 'mp4' : 'webm'}`,
+                                mimeType: mimeType,
+                                parents: ['1vsvYXG3w_nnJOp845et41CJWrRP4iFHF'] // Backup folder ID
+                            };
+                            
+                            backupForm.append('metadata', new Blob([JSON.stringify(backupMetadata)], { type: 'application/json' }));
+                            backupForm.append('file', blob);
+
+                            const backupResponse = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                                method: 'POST',
+                                headers: { 'Authorization': `Bearer ${token}` },
+                                body: backupForm
+                            });
+
+                            if (!backupResponse.ok) throw new Error('Backup folder upload failed');
+
+                            showStatusMessage('✓ Video uploaded successfully', 2000);
+                            if (isIOS && navigator.vibrate) navigator.vibrate(200);
                         } catch (error) {
                             console.error('Upload failed:', error);
-                            if (error.message.includes('Not authenticated')) {
+                            if (error.message.includes('auth') || error.message.includes('401')) {
                                 await handleIOSAuth();
+                                showStatusMessage('Please try recording again', 2000);
                             } else {
-                                showStatusMessage('Upload failed: ' + error.message);
+                                showStatusMessage('Upload failed: ' + error.message, 3000);
                             }
                         }
                         globals.recordedChunks = [];
                     };
 
-                    // Shorter intervals for iOS
+                    // Start recording with shorter intervals for iOS
                     globals.mediaRecorder.start(isIOS ? 100 : 1000);
                     this.classList.add('recording');
                     
-                    // Update button appearance for recording state
+                    // Update button appearance
                     this.innerHTML = `
                         <svg width="24" height="24" viewBox="0 0 24 24" fill="red">
                             <rect x="6" y="6" width="12" height="12"/>
@@ -1030,7 +1092,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5-05');
+        console.log('Camera App v1.0.5-06');
     </script>
 </body>
 </html>

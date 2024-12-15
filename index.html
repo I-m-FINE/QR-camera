@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.8.3');</script>
+    <script>console.log('Camera App v1.8.4');</script>
     <style>
         * {
             margin: 0;
@@ -453,72 +453,99 @@
 
             // iOS specific zoom handling
             if (isIOS) {
-                zoomControls.style.display = 'flex';
-                globals.minZoom = 1;
-                globals.maxZoom = 3; // iOS typically supports up to 3x zoom
-                globals.currentZoom = 1;
-                
-                document.getElementById('zoomIn').onclick = async () => {
-                    try {
-                        globals.currentZoom = Math.min(globals.currentZoom + globals.zoomStep, globals.maxZoom);
-                        await track.applyConstraints({
-                            advanced: [{
-                                zoom: globals.currentZoom
-                            }]
+                try {
+                    zoomControls.style.display = 'flex';
+                    globals.minZoom = 1;
+                    globals.maxZoom = 3; // iOS typically supports up to 3x zoom
+                    globals.currentZoom = 1;
+                    
+                    // For iOS, we need to check if zoom is available in a different way
+                    track.getCapabilities().then(capabilities => {
+                        if (!capabilities || !capabilities.zoom) {
+                            // Try direct constraint application for iOS
+                            return track.applyConstraints({
+                                advanced: [{ zoom: 1.0 }]
+                            });
+                        }
+                    }).catch(() => {
+                        // If getCapabilities fails, try direct constraint application
+                        return track.applyConstraints({
+                            advanced: [{ zoom: 1.0 }]
                         });
-                        updateZoomUI();
-                    } catch (error) {
-                        console.error('iOS zoom error:', error);
-                    }
-                };
+                    });
 
-                document.getElementById('zoomOut').onclick = async () => {
-                    try {
-                        globals.currentZoom = Math.max(globals.currentZoom - globals.zoomStep, globals.minZoom);
-                        await track.applyConstraints({
-                            advanced: [{
-                                zoom: globals.currentZoom
-                            }]
-                        });
-                        updateZoomUI();
-                    } catch (error) {
-                        console.error('iOS zoom error:', error);
-                    }
-                };
-
-                // Add pinch zoom for iOS
-                const camera = document.getElementById('camera');
-                let initialDistance = 0;
-                let initialZoom = 1;
-
-                camera.addEventListener('touchstart', (e) => {
-                    if (e.touches.length === 2) {
-                        e.preventDefault();
-                        initialDistance = getDistance(e.touches[0], e.touches[1]);
-                        initialZoom = globals.currentZoom;
-                    }
-                }, { passive: false });
-
-                camera.addEventListener('touchmove', (e) => {
-                    if (e.touches.length === 2) {
-                        e.preventDefault();
-                        const distance = getDistance(e.touches[0], e.touches[1]);
-                        const scale = distance / initialDistance;
-                        const newZoom = Math.max(globals.minZoom, 
-                            Math.min(globals.maxZoom, initialZoom * scale));
-                        
-                        track.applyConstraints({
-                            advanced: [{
-                                zoom: newZoom
-                            }]
-                        }).then(() => {
+                    document.getElementById('zoomIn').onclick = async () => {
+                        try {
+                            const newZoom = Math.min(globals.currentZoom + globals.zoomStep, globals.maxZoom);
+                            await track.applyConstraints({
+                                advanced: [{
+                                    zoom: newZoom
+                                }]
+                            });
                             globals.currentZoom = newZoom;
                             updateZoomUI();
-                        }).catch(error => {
-                            console.error('iOS pinch zoom error:', error);
-                        });
-                    }
-                }, { passive: false });
+                            console.log('iOS zoom applied:', newZoom);
+                        } catch (error) {
+                            console.error('iOS zoom error:', error);
+                        }
+                    };
+
+                    document.getElementById('zoomOut').onclick = async () => {
+                        try {
+                            const newZoom = Math.max(globals.currentZoom - globals.zoomStep, globals.minZoom);
+                            await track.applyConstraints({
+                                advanced: [{
+                                    zoom: newZoom
+                                }]
+                            });
+                            globals.currentZoom = newZoom;
+                            updateZoomUI();
+                            console.log('iOS zoom applied:', newZoom);
+                        } catch (error) {
+                            console.error('iOS zoom error:', error);
+                        }
+                    };
+
+                    // Add pinch zoom for iOS with direct constraint application
+                    const camera = document.getElementById('camera');
+                    let initialDistance = 0;
+                    let initialZoom = 1;
+
+                    camera.addEventListener('touchstart', (e) => {
+                        if (e.touches.length === 2) {
+                            e.preventDefault();
+                            initialDistance = getDistance(e.touches[0], e.touches[1]);
+                            initialZoom = globals.currentZoom;
+                        }
+                    }, { passive: false });
+
+                    camera.addEventListener('touchmove', async (e) => {
+                        if (e.touches.length === 2) {
+                            e.preventDefault();
+                            const distance = getDistance(e.touches[0], e.touches[1]);
+                            const scale = distance / initialDistance;
+                            const newZoom = Math.max(globals.minZoom, 
+                                Math.min(globals.maxZoom, initialZoom * scale));
+                            
+                            try {
+                                await track.applyConstraints({
+                                    advanced: [{
+                                        zoom: newZoom
+                                    }]
+                                });
+                                globals.currentZoom = newZoom;
+                                updateZoomUI();
+                                console.log('iOS pinch zoom applied:', newZoom);
+                            } catch (error) {
+                                console.error('iOS pinch zoom error:', error);
+                            }
+                        }
+                    }, { passive: false });
+
+                } catch (error) {
+                    console.error('iOS zoom initialization error:', error);
+                    zoomControls.style.display = 'none';
+                }
 
             } else {
                 // Non-iOS devices - use standard zoom capabilities
@@ -891,7 +918,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.8.33');
+        console.log('Camera App v1.8.4');
     </script>
 </body>
 </html>

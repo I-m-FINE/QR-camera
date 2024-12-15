@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-04');</script>
+    <script>console.log('Camera App v1.0.5-00');</script>
     <style>
         /* Reset default styles */
         * {
@@ -734,18 +734,94 @@
             }
         }
 
-        // Update the capture button handler
+        // Add Android-specific auth handler
+        async function handleAndroidAuth() {
+            console.log('Handling Android authentication...');
+            try {
+                const token = localStorage.getItem('googleToken');
+                if (!token) {
+                    console.log('No token found for Android, showing sign-in...');
+                    return new Promise((resolve, reject) => {
+                        const overlay = document.createElement('div');
+                        overlay.style.cssText = `
+                            position: fixed;
+                            top: 0;
+                            left: 0;
+                            width: 100%;
+                            height: 100%;
+                            background: rgba(0,0,0,0.8);
+                            z-index: 10000;
+                            display: flex;
+                            flex-direction: column;
+                            align-items: center;
+                            justify-content: center;
+                        `;
+
+                        const signInButton = document.createElement('button');
+                        signInButton.style.cssText = `
+                            padding: 12px 24px;
+                            font-size: 16px;
+                            background: #4285f4;
+                            color: white;
+                            border: none;
+                            border-radius: 4px;
+                            margin: 10px;
+                            cursor: pointer;
+                        `;
+                        signInButton.textContent = 'Sign in with Google';
+
+                        overlay.appendChild(signInButton);
+                        document.body.appendChild(overlay);
+
+                        signInButton.addEventListener('click', () => {
+                            google.accounts.oauth2.initTokenClient({
+                                client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
+                                scope: 'https://www.googleapis.com/auth/drive.file',
+                                callback: (response) => {
+                                    if (response.access_token) {
+                                        localStorage.setItem('googleToken', response.access_token);
+                                        overlay.remove();
+                                        resolve(true);
+                                    } else {
+                                        reject(new Error('Sign-in failed'));
+                                    }
+                                }
+                            }).requestAccessToken();
+                        });
+                    });
+                }
+                return true;
+            } catch (error) {
+                console.error('Android auth error:', error);
+                return false;
+            }
+        }
+
+        // Update the capture button handler to include Android auth
         document.getElementById('capture').addEventListener('click', async () => {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
             
             if (isIOS) {
+                // Keep existing iOS auth code
                 try {
                     const authSuccess = await handleIOSAuth();
                     if (!authSuccess) {
                         return;
                     }
                 } catch (error) {
-                    console.error('Auth failed:', error);
+                    console.error('iOS Auth failed:', error);
+                    return;
+                }
+            } else if (isAndroid) {
+                try {
+                    const authSuccess = await handleAndroidAuth();
+                    if (!authSuccess) {
+                        showStatusMessage('Please sign in to continue');
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Android Auth failed:', error);
                     return;
                 }
             }
@@ -871,11 +947,13 @@
             }
         });
 
-        // Update the record button handler for iOS
+        // Update the record button handler to include Android auth
         document.getElementById('recordButton').addEventListener('click', async function() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const isAndroid = /Android/.test(navigator.userAgent);
             
             if (isIOS) {
+                // Keep existing iOS auth code
                 try {
                     const authSuccess = await handleIOSAuth();
                     if (!authSuccess) {
@@ -883,6 +961,17 @@
                     }
                 } catch (error) {
                     console.error('Auth failed:', error);
+                    return;
+                }
+            } else if (isAndroid) {
+                try {
+                    const authSuccess = await handleAndroidAuth();
+                    if (!authSuccess) {
+                        showStatusMessage('Please sign in to continue');
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Android Auth failed:', error);
                     return;
                 }
             }
@@ -943,7 +1032,7 @@
                             console.log('Video blob created, size:', blob.size);
 
                             // Upload to main folder
-                            showStatusMessage('Uploading to main folder...');
+                            showStatusMessage('Uploading to folder...');
                             const mainForm = new FormData();
                             const mainMetadata = {
                                 name: `video_${new Date().toISOString()}.${isIOS ? 'mp4' : 'webm'}`,
@@ -963,10 +1052,10 @@
                                 body: mainForm
                             });
 
-                            if (!mainResponse.ok) throw new Error('Main folder upload failed');
+                            if (!mainResponse.ok) throw new Error('upload failed');
                             
                             // Upload to backup folder
-                            showStatusMessage('Uploading to backup folder...');
+                            showStatusMessage('Uploading to folder...');
                             const backupForm = new FormData();
                             const backupMetadata = {
                                 name: `video_${new Date().toISOString()}_backup.${isIOS ? 'mp4' : 'webm'}`,
@@ -983,7 +1072,7 @@
                                 body: backupForm
                             });
 
-                            if (!backupResponse.ok) throw new Error('Backup folder upload failed');
+                            if (!backupResponse.ok) throw new Error('upload failed');
 
                             showStatusMessage('✓ Video uploaded successfully', 2000);
                             if (isIOS && navigator.vibrate) navigator.vibrate(200);
@@ -1099,7 +1188,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5-04');
+        console.log('Camera App v1.0.5-00');
     </script>
 </body>
 </html>

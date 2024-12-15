@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-08');</script>
+    <script>console.log('Camera App v1.0.5-09');</script>
     <style>
         /* Reset default styles */
         * {
@@ -618,36 +618,98 @@
             });
         }
 
+        // Add this helper function for iOS authentication
+        async function handleIOSAuth() {
+            console.log('Handling iOS authentication...');
+            try {
+                // Clear any existing timeouts
+                if (window.iosAuthTimeout) {
+                    clearTimeout(window.iosAuthTimeout);
+                }
+
+                // Show loading message
+                showStatusMessage('Preparing camera...');
+
+                // Request permissions first
+                await requestIOSPermissions();
+
+                // Check authentication
+                if (!localStorage.getItem('googleToken')) {
+                    console.log('No auth token found, initiating login...');
+                    showStatusMessage('Please sign in...');
+                    
+                    // Create a promise that resolves when authentication is complete
+                    const authPromise = new Promise((resolve, reject) => {
+                        window.iosAuthCallback = (success) => {
+                            if (success) resolve();
+                            else reject(new Error('Authentication failed'));
+                        };
+                        
+                        // Set a timeout for auth
+                        window.iosAuthTimeout = setTimeout(() => {
+                            reject(new Error('Authentication timeout'));
+                        }, 30000); // 30 second timeout
+                        
+                        // Trigger login UI
+                        if (window.createIOSLoginUI) {
+                            window.createIOSLoginUI();
+                        } else {
+                            reject(new Error('Login UI not available'));
+                        }
+                    });
+
+                    await authPromise;
+                }
+
+                return true;
+            } catch (error) {
+                console.error('iOS auth error:', error);
+                showStatusMessage(error.message === 'Authentication timeout' ? 
+                    'Sign in timed out. Please try again.' : 
+                    'Please allow camera access and sign in');
+                return false;
+            }
+        }
+
+        // Update the capture button handler
         document.getElementById('capture').addEventListener('click', async () => {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
             if (isIOS) {
                 try {
-                    await requestIOSPermissions();
+                    const authSuccess = await handleIOSAuth();
+                    if (!authSuccess) return;
                 } catch (error) {
-                    console.error('iOS permissions failed:', error);
+                    console.error('iOS auth failed:', error);
                     return;
                 }
             }
 
-            if (!localStorage.getItem('googleToken')) {
-                console.log('No auth token found, showing login UI');
-                if (window.createIOSLoginUI) {
-                    window.createIOSLoginUI();
-                }
-                return;
-            }
-
             const video = document.getElementById('camera');
-            const canvas = document.createElement('canvas');
             
-            if (isIOS) {
-                // Force canvas dimensions for iOS
-                canvas.width = video.videoWidth || 1280;
-                canvas.height = video.videoHeight || 720;
+            try {
+                // Check if video is ready
+                if (video.readyState !== 4) {
+                    await new Promise((resolve, reject) => {
+                        const timeout = setTimeout(() => {
+                            reject(new Error('Video stream timeout'));
+                        }, 10000);
+
+                        video.onloadeddata = () => {
+                            clearTimeout(timeout);
+                            resolve();
+                        };
+                    });
+                }
+
+                const canvas = document.createElement('canvas');
                 
-                try {
-                    // Add a slight delay for iOS to ensure video is ready
+                if (isIOS) {
+                    // Force canvas dimensions for iOS
+                    canvas.width = video.videoWidth || 1280;
+                    canvas.height = video.videoHeight || 720;
+                    
+                    // Add a slight delay for iOS
                     await new Promise(resolve => setTimeout(resolve, 100));
                     
                     if (window.orientation === 90 || window.orientation === -90) {
@@ -660,28 +722,35 @@
                     } else {
                         canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
                     }
-                } catch (error) {
-                    console.error('iOS canvas error:', error);
-                    showStatusMessage('Failed to capture photo');
-                    return;
+                } else {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
                 }
-            } else {
-                canvas.width = video.videoWidth;
-                canvas.height = video.videoHeight;
-                canvas.getContext('2d').drawImage(video, 0, 0);
-            }
-            
-            canvas.toBlob(async (blob) => {
-                showStatusMessage('Processing photo...');
-                try {
-                    await window.uploadToDrive(blob, 'image');
-                } catch (error) {
-                    console.error('Upload failed:', error);
-                    if (error.message.includes('Not authenticated')) {
-                        window.createIOSLoginUI && window.createIOSLoginUI();
+                
+                canvas.toBlob(async (blob) => {
+                    showStatusMessage('Processing photo...');
+                    try {
+                        await window.uploadToDrive(blob, 'image');
+                    } catch (error) {
+                        console.error('Upload failed:', error);
+                        if (error.message.includes('Not authenticated')) {
+                            if (isIOS) {
+                                handleIOSAuth();
+                            } else if (window.createIOSLoginUI) {
+                                window.createIOSLoginUI();
+                            }
+                        } else {
+                            showStatusMessage('Upload failed: ' + error.message);
+                        }
                     }
-                }
-            }, 'image/jpeg', 0.95);
+                }, 'image/jpeg', 0.95);
+            } catch (error) {
+                console.error('Capture error:', error);
+                showStatusMessage(error.message === 'Video stream timeout' ? 
+                    'Camera timeout. Please refresh the page.' : 
+                    'Failed to capture photo');
+            }
         });
 
         document.getElementById('recordButton').addEventListener('click', async function() {
@@ -772,13 +841,32 @@
             }
         });
 
+        // Update the iOS detection and button handling
         if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-            const buttons = ['capture', 'recordButton', 'switchCamera'];
-            buttons.forEach(buttonId => {
+            document.body.classList.add('ios-device');
+            
+            // Add iOS-specific meta tags dynamically
+            const metaTags = [
+                { name: 'apple-mobile-web-app-capable', content: 'yes' },
+                { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }
+            ];
+            
+            metaTags.forEach(tag => {
+                if (!document.querySelector(`meta[name="${tag.name}"]`)) {
+                    const meta = document.createElement('meta');
+                    meta.name = tag.name;
+                    meta.content = tag.content;
+                    document.head.appendChild(meta);
+                }
+            });
+
+            // Add touch handlers for iOS buttons
+            ['capture', 'recordButton', 'switchCamera'].forEach(buttonId => {
                 const button = document.getElementById(buttonId);
                 if (button) {
                     button.addEventListener('touchstart', (e) => {
                         e.preventDefault();
+                        e.stopPropagation();
                         button.click();
                     }, { passive: false });
                 }
@@ -796,7 +884,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5-08');
+        console.log('Camera App v1.0.5-09');
     </script>
 </body>
 </html>

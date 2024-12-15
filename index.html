@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-10');</script>
+    <script>console.log('Camera App v1.0.5-00');</script>
     <style>
         /* Reset default styles */
         * {
@@ -600,43 +600,109 @@
             }
         });
 
-        // Simplified iOS authentication handler
+        // iOS specific Google Sign-In handler
+        async function forceIOSGoogleSignIn() {
+            return new Promise((resolve, reject) => {
+                // Create a full-screen overlay for iOS
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.8);
+                    z-index: 10000;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                `;
+
+                // Add sign-in button
+                const signInButton = document.createElement('button');
+                signInButton.style.cssText = `
+                    padding: 12px 24px;
+                    font-size: 16px;
+                    background: #4285f4;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    margin: 10px;
+                    cursor: pointer;
+                `;
+                signInButton.textContent = 'Sign in with Google';
+
+                // Add close button
+                const closeButton = document.createElement('button');
+                closeButton.style.cssText = `
+                    padding: 12px 24px;
+                    font-size: 16px;
+                    background: #666;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    margin: 10px;
+                    cursor: pointer;
+                `;
+                closeButton.textContent = 'Cancel';
+
+                overlay.appendChild(signInButton);
+                overlay.appendChild(closeButton);
+                document.body.appendChild(overlay);
+
+                // Handle sign in click
+                signInButton.addEventListener('click', () => {
+                    google.accounts.oauth2.initTokenClient({
+                        client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
+                        scope: 'https://www.googleapis.com/auth/drive.file',
+                        callback: (response) => {
+                            if (response.access_token) {
+                                localStorage.setItem('googleToken', response.access_token);
+                                overlay.remove();
+                                resolve(true);
+                            } else {
+                                console.error('Sign-in failed');
+                                reject(new Error('Sign-in failed'));
+                            }
+                        },
+                        error_callback: (error) => {
+                            console.error('Google Sign-In error:', error);
+                            reject(error);
+                        }
+                    }).requestAccessToken();
+                });
+
+                // Handle close
+                closeButton.addEventListener('click', () => {
+                    overlay.remove();
+                    reject(new Error('Sign-in cancelled'));
+                });
+            });
+        }
+
+        // Update handleIOSAuth function
         async function handleIOSAuth() {
             console.log('Handling iOS authentication...');
             try {
-                // Only check for Google authentication
                 if (!localStorage.getItem('googleToken')) {
-                    console.log('No auth token found, initiating login...');
+                    console.log('No auth token found, showing iOS sign-in UI');
                     showStatusMessage('Please sign in to Google...');
                     
-                    // Create a promise that resolves when authentication is complete
-                    const authPromise = new Promise((resolve, reject) => {
-                        // Force the Google Sign-In popup
-                        google.accounts.oauth2.initTokenClient({
-                            client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
-                            scope: 'https://www.googleapis.com/auth/drive.file',
-                            callback: (response) => {
-                                if (response.access_token) {
-                                    localStorage.setItem('googleToken', response.access_token);
-                                    resolve(true);
-                                } else {
-                                    reject(new Error('Google Sign-In failed'));
-                                }
-                            },
-                            error_callback: (error) => {
-                                console.error('Google Sign-In error:', error);
-                                reject(error);
-                            }
-                        }).requestAccessToken();
-                    });
-
-                    await authPromise;
+                    try {
+                        await forceIOSGoogleSignIn();
+                        showStatusMessage('Sign in successful', 1000);
+                        return true;
+                    } catch (error) {
+                        console.error('iOS sign-in error:', error);
+                        showStatusMessage('Please try signing in again');
+                        return false;
+                    }
                 }
-
                 return true;
             } catch (error) {
                 console.error('Auth error:', error);
-                showStatusMessage('Please sign in to Google to continue');
+                showStatusMessage('Sign in failed. Please try again.');
                 return false;
             }
         }
@@ -649,18 +715,6 @@
                 try {
                     const authSuccess = await handleIOSAuth();
                     if (!authSuccess) {
-                        console.log('Retrying Google Sign-In...');
-                        google.accounts.oauth2.initTokenClient({
-                            client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
-                            scope: 'https://www.googleapis.com/auth/drive.file',
-                            callback: (response) => {
-                                if (response.access_token) {
-                                    localStorage.setItem('googleToken', response.access_token);
-                                    // Retry capture after successful auth
-                                    setTimeout(() => document.getElementById('capture').click(), 500);
-                                }
-                            }
-                        }).requestAccessToken();
                         return;
                     }
                 } catch (error) {
@@ -863,7 +917,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.0.5-10');
+        console.log('Camera App v1.0.5-00');
     </script>
 </body>
 </html>

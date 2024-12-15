@@ -1,6 +1,6 @@
 // Google OAuth configuration
 const CLIENT_ID = '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com';
-const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'; 
+const FOLDER_ID = '1YourSpecificFolderID'; // Replace with your actual folder ID
 
 let tokenClient;
 let gapiInited = false;
@@ -21,7 +21,14 @@ function initializeGis() {
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: '', // defined later
+        callback: (response) => {
+            if (response.access_token) {
+                // Store the token and expiry time
+                localStorage.setItem('gapi_token', response.access_token);
+                localStorage.setItem('gapi_token_expiry', Date.now() + (response.expires_in * 1000));
+                console.log('Token stored successfully');
+            }
+        }
     });
     gisInited = true;
     maybeEnableButtons();
@@ -33,17 +40,28 @@ function maybeEnableButtons() {
     }
 }
 
-// Get access token using Google Identity Services
+// Get access token using stored token or request new one
 async function getAccessToken() {
+    const storedToken = localStorage.getItem('gapi_token');
+    const tokenExpiry = localStorage.getItem('gapi_token_expiry');
+    
+    // Check if we have a valid token
+    if (storedToken && tokenExpiry && Date.now() < parseInt(tokenExpiry)) {
+        console.log('Using stored token');
+        return storedToken;
+    }
+
+    // Token doesn't exist or is expired, request new one
     return new Promise((resolve, reject) => {
         try {
-            tokenClient.callback = async (response) => {
+            tokenClient.callback = (response) => {
                 if (response.error !== undefined) {
                     reject(response);
+                    return;
                 }
                 resolve(response.access_token);
             };
-            tokenClient.requestAccessToken();
+            tokenClient.requestAccessToken({ prompt: 'consent' });
         } catch (err) {
             reject(err);
         }
@@ -80,6 +98,12 @@ async function uploadToDrive(file, type = 'image') {
         });
 
         if (!response.ok) {
+            if (response.status === 401) {
+                // Token might be invalid, clear storage and try again
+                localStorage.removeItem('gapi_token');
+                localStorage.removeItem('gapi_token_expiry');
+                return uploadToDrive(file, type); // Retry upload
+            }
             throw new Error(`Upload failed: ${response.statusText}`);
         }
 
@@ -117,9 +141,7 @@ function showStatusMessage(message, duration = 3000) {
 
 // Initialize the Google APIs
 document.addEventListener('DOMContentLoaded', () => {
-    // Load the Google API client library
     gapi.load('client', initializeGapiClient);
-    // Initialize Google Identity Services
     initializeGis();
 });
 

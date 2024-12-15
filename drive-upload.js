@@ -21,6 +21,7 @@ function showStatus(message, duration = 3000) {
             border-radius: 8px;
             z-index: 9999;
             text-align: center;
+        `;
         document.body.appendChild(div);
     }
     

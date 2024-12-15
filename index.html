@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-00');</script>
+    <script>console.log('Camera App v1.0.5-01');</script>
     <style>
         /* Reset default styles */
         * {
@@ -551,6 +551,8 @@
                 border-radius: 8px;
                 z-index: 9999;
                 text-align: center;
+                font-size: 16px;
+                max-width: 80%;
             `;
             statusEl.textContent = message;
             document.body.appendChild(statusEl);
@@ -726,6 +728,8 @@
             const video = document.getElementById('camera');
             
             try {
+                showStatusMessage('Capturing photo...');
+                
                 const canvas = document.createElement('canvas');
                 
                 if (isIOS) {
@@ -749,13 +753,22 @@
                 }
                 
                 canvas.toBlob(async (blob) => {
-                    showStatusMessage('Processing photo...');
+                    showStatusMessage('Uploading photo...');
                     try {
                         await window.uploadToDrive(blob, 'image');
+                        showStatusMessage('Photo uploaded successfully', 2000);
+                        // Play a success sound or vibrate for feedback
+                        if (isIOS) {
+                            try {
+                                navigator.vibrate(200);
+                            } catch (e) {
+                                console.log('Vibration not supported');
+                            }
+                        }
                     } catch (error) {
                         console.error('Upload failed:', error);
                         if (error.message.includes('Not authenticated')) {
-                            handleIOSAuth();
+                            await handleIOSAuth();
                         } else {
                             showStatusMessage('Upload failed: ' + error.message);
                         }
@@ -767,22 +780,20 @@
             }
         });
 
+        // Update the record button handler
         document.getElementById('recordButton').addEventListener('click', async function() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
             if (isIOS) {
                 try {
-                    await requestIOSPermissions();
+                    const authSuccess = await handleIOSAuth();
+                    if (!authSuccess) {
+                        return;
+                    }
                 } catch (error) {
-                    console.error('iOS permissions failed:', error);
+                    console.error('Auth failed:', error);
                     return;
                 }
-            }
-
-            if (!localStorage.getItem('googleToken')) {
-                console.log('No auth token found, showing login UI');
-                window.createIOSLoginUI && window.createIOSLoginUI();
-                return;
             }
 
             const video = document.getElementById('camera');
@@ -800,17 +811,16 @@
                             videoBitsPerSecond: 2000000,
                             audioBitsPerSecond: 128000
                         };
+                        
+                        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                            options.mimeType = 'video/webm';
+                        }
                     } else {
                         options = {
                             mimeType: 'video/webm;codecs=h264,opus',
                             videoBitsPerSecond: 2500000,
                             audioBitsPerSecond: 128000
                         };
-                    }
-
-                    // Add a slight delay for iOS to ensure everything is ready
-                    if (isIOS) {
-                        await new Promise(resolve => setTimeout(resolve, 100));
                     }
 
                     globals.mediaRecorder = new MediaRecorder(stream, options);
@@ -827,9 +837,14 @@
                             const mimeType = isIOS ? 'video/mp4' : 'video/webm';
                             const blob = new Blob(globals.recordedChunks, { type: mimeType });
                             await window.uploadToDrive(blob, 'video');
+                            showStatusMessage('Video uploaded successfully', 2000);
                         } catch (error) {
                             console.error('Upload failed:', error);
-                            showStatusMessage('Upload failed: ' + error.message);
+                            if (error.message.includes('Not authenticated')) {
+                                await handleIOSAuth();
+                            } else {
+                                showStatusMessage('Upload failed: ' + error.message);
+                            }
                         }
                         globals.recordedChunks = [];
                     };
@@ -837,6 +852,14 @@
                     // Shorter intervals for iOS
                     globals.mediaRecorder.start(isIOS ? 100 : 1000);
                     this.classList.add('recording');
+                    
+                    // Update button appearance for recording state
+                    this.innerHTML = `
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="red">
+                            <rect x="6" y="6" width="12" height="12"/>
+                        </svg>
+                    `;
+                    
                     showStatusMessage('Recording started...', 1000);
                     
                 } catch (error) {
@@ -852,6 +875,7 @@
                         <circle cx="12" cy="12" r="8"/>
                     </svg>
                 `;
+                showStatusMessage('Recording stopped', 1000);
             }
         });
 
@@ -917,7 +941,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.0.5-00');
+        console.log('Camera App v1.0.5-01');
     </script>
 </body>
 </html>

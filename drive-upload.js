@@ -5,10 +5,9 @@ const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 const REDIRECT_URI = 'https://i-m-fine.github.io/QR-camera/';
 
 // Global status message function
-function showStatus(message, duration = 3000) {
+window.showStatus = function(message, duration = 3000) {
     let statusEl = document.getElementById('statusMessage');
     
-    // Create status element if it doesn't exist
     if (!statusEl) {
         statusEl = document.createElement('div');
         statusEl.id = 'statusMessage';
@@ -33,7 +32,7 @@ function showStatus(message, duration = 3000) {
     setTimeout(() => {
         statusEl.style.display = 'none';
     }, duration);
-}
+};
 
 // Create login UI
 function createIOSLoginUI() {

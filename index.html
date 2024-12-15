@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.7.3');</script>
+    <script>console.log('Camera App v1.7.4');</script>
     <style>
         * {
             margin: 0;
@@ -557,16 +557,42 @@
             }
 
             const video = document.getElementById('camera');
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
             if (!globals.mediaRecorder || globals.mediaRecorder.state === 'inactive') {
                 globals.recordedChunks = [];
                 const stream = video.srcObject;
                 
                 try {
-                    globals.mediaRecorder = new MediaRecorder(stream, {
-                        mimeType: 'video/webm;codecs=h264',
-                        videoBitsPerSecond: 2500000
-                    });
+                    // Check supported MIME types
+                    let options;
+                    if (isIOS) {
+                        // iOS-specific options
+                        if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
+                            options = { mimeType: 'video/mp4;codecs=h264,aac' };
+                        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
+                            options = { mimeType: 'video/mp4' };
+                        } else {
+                            throw new Error('No supported video codec found for this device');
+                        }
+                    } else {
+                        // Default options for other devices
+                        if (MediaRecorder.isTypeSupported('video/webm;codecs=h264')) {
+                            options = {
+                                mimeType: 'video/webm;codecs=h264',
+                                videoBitsPerSecond: 2500000
+                            };
+                        } else if (MediaRecorder.isTypeSupported('video/webm')) {
+                            options = {
+                                mimeType: 'video/webm',
+                                videoBitsPerSecond: 2500000
+                            };
+                        } else {
+                            throw new Error('No supported video codec found for this device');
+                        }
+                    }
+
+                    globals.mediaRecorder = new MediaRecorder(stream, options);
 
                     globals.mediaRecorder.ondataavailable = (event) => {
                         if (event.data.size > 0) {
@@ -576,28 +602,37 @@
 
                     globals.mediaRecorder.onstop = async () => {
                         showStatusMessage('Processing video...');
-                        const blob = new Blob(globals.recordedChunks, { type: 'video/webm' });
                         try {
+                            const mimeType = isIOS ? 'video/mp4' : 'video/webm';
+                            const blob = new Blob(globals.recordedChunks, { type: mimeType });
                             await window.uploadToDrive(blob, 'video');
                         } catch (error) {
                             console.error('Upload failed:', error);
                             if (error.message.includes('Not authenticated')) {
                                 window.createIOSLoginUI && window.createIOSLoginUI();
+                            } else {
+                                showStatusMessage('Upload failed: ' + error.message);
                             }
                         }
                         globals.recordedChunks = [];
                     };
 
-                    globals.mediaRecorder.start(1000);
+                    // Start recording with shorter chunks for iOS
+                    globals.mediaRecorder.start(isIOS ? 100 : 1000);
                     this.classList.add('recording');
                     this.innerHTML = `
                         <svg class="recording-icon" width="24" height="24" viewBox="0 0 24 24">
                             <circle cx="12" cy="12" r="8" fill="red"/>
                         </svg>
                     `;
+                    
+                    // Show recording indicator
+                    showStatusMessage('Recording started...', 1000);
+                    
                 } catch (error) {
                     console.error('Failed to start recording:', error);
-                    showStatusMessage('Failed to start recording');
+                    showStatusMessage('Recording not supported on this device');
+                    this.classList.remove('recording');
                 }
             } else {
                 globals.mediaRecorder.stop();
@@ -608,11 +643,12 @@
                         <circle cx="12" cy="12" r="3" fill="currentColor"/>
                     </svg>
                 `;
+                showStatusMessage('Recording stopped', 1000);
             }
         });
 
         // Update version
-        console.log('Camera App v1.7.3');
+        console.log('Camera App v1.7.4');
     </script>
 </body>
 </html>

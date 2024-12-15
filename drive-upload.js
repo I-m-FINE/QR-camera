@@ -1,6 +1,6 @@
 // Google OAuth configuration
 const CLIENT_ID = '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com';
-const FOLDER_ID = '1YourSpecificFolderID'; // Replace with your actual folder ID
+const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'; 
 
 let tokenClient;
 let gapiInited = false;

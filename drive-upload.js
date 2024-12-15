@@ -129,17 +129,11 @@ window.addEventListener('load', function() {
 
 // Upload function
 async function uploadToDrive(file, type = 'image') {
-    const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'; // Replace with your main folder ID
-    const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF'; // Replace with your backup folder ID
+    // Replace these with your actual folder IDs
+    const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
+    const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF'; // Add your backup folder ID here
 
     try {
-        // Create base metadata
-        const baseMetadata = {
-            name: `${type}_${new Date().toISOString()}.${type === 'image' ? 'jpg' : 'mp4'}`,
-            mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4'
-        };
-
-        // Get access token
         let token;
         try {
             token = await getAccessToken();
@@ -149,11 +143,12 @@ async function uploadToDrive(file, type = 'image') {
             return;
         }
 
-        // Upload to both folders simultaneously
-        const uploadPromises = [MAIN_FOLDER_ID, BACKUP_FOLDER_ID].map(async (folderId) => {
+        // First upload to main folder
+        const mainUpload = async () => {
             const metadata = {
-                ...baseMetadata,
-                parents: [folderId]
+                name: `${type}_${new Date().toISOString()}.${type === 'image' ? 'jpg' : 'mp4'}`,
+                mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
+                parents: [MAIN_FOLDER_ID]
             };
 
             const form = new FormData();
@@ -169,25 +164,49 @@ async function uploadToDrive(file, type = 'image') {
             });
 
             if (!response.ok) {
-                if (response.status === 401) {
-                    // Token expired
-                    accessToken = null;
-                    throw new Error('Token expired');
-                }
-                throw new Error(`Upload failed to ${folderId}: ${response.statusText}`);
+                throw new Error(`Main upload failed: ${response.statusText}`);
             }
 
             return await response.json();
-        });
+        };
 
+        // Then upload to backup folder
+        const backupUpload = async () => {
+            const metadata = {
+                name: `${type}_${new Date().toISOString()}_backup.${type === 'image' ? 'jpg' : 'mp4'}`,
+                mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
+                parents: [BACKUP_FOLDER_ID]
+            };
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', file);
+
+            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: form
+            });
+
+            if (!response.ok) {
+                throw new Error(`Backup upload failed: ${response.statusText}`);
+            }
+
+            return await response.json();
+        };
+
+        // Execute both uploads
         try {
-            const results = await Promise.all(uploadPromises);
-            console.log('Files uploaded successfully:', results);
+            const [mainResult, backupResult] = await Promise.all([mainUpload(), backupUpload()]);
+            console.log('Main upload:', mainResult);
+            console.log('Backup upload:', backupResult);
             utils.showMessage('Upload complete to both folders', 2000);
-            return results;
+            return { main: mainResult, backup: backupResult };
         } catch (error) {
-            if (error.message.includes('Token expired')) {
-                // Retry once with new token
+            if (error.message.includes('401')) {
+                // Token expired, retry once
                 accessToken = null;
                 return uploadToDrive(file, type);
             }
@@ -201,7 +220,6 @@ async function uploadToDrive(file, type = 'image') {
     }
 }
 
-// Make functions available globally
+// Export functions
 window.uploadToDrive = uploadToDrive;
-window.createIOSLoginUI = createIOSLoginUI;
-window.showStatus = showStatus;
+window.utils = utils;

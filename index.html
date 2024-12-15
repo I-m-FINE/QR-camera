@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.8.5');</script>
+    <script>console.log('Camera App v1.8.6');</script>
     <style>
         * {
             margin: 0;
@@ -463,14 +463,32 @@
                 globals.currentZoom = 1;
                 globals.zoomStep = 0.5;
 
+                // For iOS, we need to set initial zoom capability
+                try {
+                    await track.applyConstraints({
+                        advanced: [{
+                            zoom: 1
+                        }]
+                    });
+                } catch (error) {
+                    console.log('Initial iOS zoom setup:', error);
+                }
+
                 document.getElementById('zoomIn').onclick = async () => {
                     try {
                         const newZoom = Math.min(globals.currentZoom + globals.zoomStep, globals.maxZoom);
-                        await track.applyConstraints({
-                            advanced: [{
-                                zoom: newZoom
-                            }]
-                        });
+                        // Try different constraint formats for iOS
+                        try {
+                            await track.applyConstraints({ zoom: newZoom });
+                        } catch (e1) {
+                            try {
+                                await track.applyConstraints({ advanced: [{ zoom: newZoom }] });
+                            } catch (e2) {
+                                await track.applyConstraints({
+                                    advanced: [{ 'zoom': newZoom }]
+                                });
+                            }
+                        }
                         globals.currentZoom = newZoom;
                         updateZoomUI();
                         console.log('iOS zoom in:', newZoom);
@@ -482,11 +500,18 @@
                 document.getElementById('zoomOut').onclick = async () => {
                     try {
                         const newZoom = Math.max(globals.currentZoom - globals.zoomStep, globals.minZoom);
-                        await track.applyConstraints({
-                            advanced: [{
-                                zoom: newZoom
-                            }]
-                        });
+                        // Try different constraint formats for iOS
+                        try {
+                            await track.applyConstraints({ zoom: newZoom });
+                        } catch (e1) {
+                            try {
+                                await track.applyConstraints({ advanced: [{ zoom: newZoom }] });
+                            } catch (e2) {
+                                await track.applyConstraints({
+                                    advanced: [{ 'zoom': newZoom }]
+                                });
+                            }
+                        }
                         globals.currentZoom = newZoom;
                         updateZoomUI();
                         console.log('iOS zoom out:', newZoom);
@@ -517,11 +542,18 @@
                             Math.min(globals.maxZoom, initialZoom * scale));
                         
                         try {
-                            await track.applyConstraints({
-                                advanced: [{
-                                    zoom: newZoom
-                                }]
-                            });
+                            // Try different constraint formats for iOS
+                            try {
+                                await track.applyConstraints({ zoom: newZoom });
+                            } catch (e1) {
+                                try {
+                                    await track.applyConstraints({ advanced: [{ zoom: newZoom }] });
+                                } catch (e2) {
+                                    await track.applyConstraints({
+                                        advanced: [{ 'zoom': newZoom }]
+                                    });
+                                }
+                            }
                             globals.currentZoom = newZoom;
                             updateZoomUI();
                         } catch (error) {
@@ -913,7 +945,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.8.5');
+        console.log('Camera App v1.8.6');
     </script>
 </body>
 </html>

@@ -8,35 +8,110 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.0');</script>
+    <script>console.log('Camera App v1.0.1');</script>
     <style>
+        /* Reset default styles */
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+        }
+
+        /* Hide crosshair focus */
+        #camera:focus {
+            outline: none !important;
+        }
+
+        /* Zoom controls positioning */
+        .zoom-controls {
+            position: fixed;
+            right: 20px;  /* Changed from left to right */
+            top: 50%;
+            transform: translateY(-50%);
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 10px;
+            border-radius: 20px;
+            backdrop-filter: blur(5px);
+        }
+
+        #zoomLevel {
+            color: white;
+            text-align: center;
+            font-size: 14px;
+            margin: 5px 0;
+            text-shadow: 1px 1px 2px rgba(0,0,0,0.5);
+        }
+
+        /* Button container */
+        .button-container {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 30px;
+            padding: 20px;
+            z-index: 1000;
+            background: transparent;
+        }
+
+        /* Landscape mode adjustments */
+        @media screen and (orientation: landscape) {
+            .button-container {
+                bottom: 50%;
+                right: 30px;
+                left: auto;
+                transform: translateY(50%);
+                flex-direction: column;
+                padding: 20px;
+            }
+
+            .zoom-controls {
+                right: auto;
+                left: 30px;
+                top: 50%;
+                transform: translateY(-50%);
+            }
+        }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            .button-container {
+                padding-bottom: max(30px, env(safe-area-inset-bottom));
+            }
+
+            @media screen and (orientation: landscape) {
+                .button-container {
+                    right: max(30px, env(safe-area-inset-right));
+                    bottom: 50%;
+                    transform: translateY(50%);
+                    padding-bottom: 20px;
+                }
+
+                .zoom-controls {
+                    left: max(30px, env(safe-area-inset-left));
+                }
+            }
+        }
+
+        /* Remove focus outlines and tap highlights */
+        button:focus,
+        video:focus,
+        #camera:focus {
+            outline: none !important;
+        }
+
+        * {
             -webkit-tap-highlight-color: transparent;
         }
 
-        body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
-            background-color: #1a1a1a;
-            color: #ffffff;
-            min-height: 100vh;
-            min-height: -webkit-fill-available; /* iOS viewport fix */
-        }
-
-        .container {
-            width: 100%;
-            height: 100vh;
-            height: -webkit-fill-available; /* iOS viewport fix */
-            margin: 0;
-            padding: 0;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: space-between;
-        }
-
+        /* Camera container */
         .camera-container {
             width: 100%;
             height: 100vh;
@@ -49,26 +124,10 @@
             width: 100%;
             height: 100%;
             object-fit: cover;
-            transition: transform 0.3s ease-out;
+            pointer-events: none;
         }
 
-        /* Updated button container for camera-like layout */
-        .button-container {
-            position: fixed;
-            bottom: 30px;
-            left: 0;
-            right: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            gap: 30px; /* Increased gap between buttons */
-            padding: 20px;
-            z-index: 1000;
-            background: transparent;
-            transition: all 0.3s ease;
-        }
-
-        /* Modern button styles with icons */
+        /* Button styles */
         .button {
             background: rgba(0, 0, 0, 0.5);
             border: none;
@@ -83,294 +142,11 @@
             transition: all 0.2s;
         }
 
-        /* Main capture button */
         #capture {
             width: 60px;
             height: 60px;
             background: white;
             border: 3px solid rgba(255,255,255,0.8);
-        }
-
-        /* Record button */
-        #recordButton {
-            width: 45px;
-            height: 45px;
-            background: rgba(255, 68, 68, 0.9);
-            border: 2px solid rgba(255,255,255,0.8);
-        }
-
-        #recordButton.recording {
-            background: #ff0000;
-            animation: pulse 1.5s infinite;
-        }
-
-        /* Zoom controls as a simple pill */
-        .zoom-controls {
-            position: fixed;
-            bottom: 140px;
-            left: 50%;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px 15px;
-            border-radius: 20px;
-            display: none;
-            align-items: center;
-            gap: 15px;
-            z-index: 1000;
-        }
-
-        .zoom-controls button {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 24px;
-            padding: 5px 10px;
-            cursor: pointer;
-            min-width: 44px;
-            min-height: 44px;
-        }
-
-        .zoom-controls span {
-            color: white;
-            min-width: 50px;
-            text-align: center;
-            font-size: 16px;
-        }
-
-        /* Media query for different screen sizes */
-        @media screen and (max-height: 600px) {
-            .zoom-controls {
-                bottom: 120px;
-            }
-        }
-
-        /* iOS specific fixes */
-        @supports (-webkit-touch-callout: none) {
-            .zoom-controls {
-                bottom: 160px;
-                padding-bottom: calc(8px + env(safe-area-inset-bottom));
-            }
-        }
-
-        /* Android specific fixes */
-        @supports not (-webkit-touch-callout: none) {
-            @media screen and (max-width: 600px) {
-                .zoom-controls {
-                    bottom: 150px;
-                }
-            }
-        }
-
-        /* Ensure controls stay visible in landscape mode */
-        @media screen and (orientation: landscape) {
-            .zoom-controls {
-                bottom: 50%;
-                transform: translate(-50%, 80px);
-            }
-        }
-
-        /* Add touch feedback */
-        .zoom-controls button:active {
-            background-color: rgba(255, 255, 255, 0.2);
-            border-radius: 50%;
-        }
-
-        /* Preview styling */
-        #preview, #videoPreview {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            object-fit: contain;
-            background-color: black;
-            display: none;
-        }
-
-        /* Upload button */
-        #upload {
-            position: absolute;
-            bottom: 20px;
-            right: 20px;
-            background: rgba(33, 150, 243, 0.9);
-            width: 45px;
-            height: 45px;
-            display: none;
-        }
-
-        /* Animation for recording button */
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-
-        /* Landscape mode adjustments */
-        @media screen and (orientation: landscape) {
-            .button-container {
-                right: 30px;
-                bottom: 50%;
-                transform: translateY(50%);
-                flex-direction: column;
-                width: auto;
-                left: auto;
-            }
-
-            .zoom-controls {
-                left: 30px;
-                bottom: 50%;
-                transform: translateY(50%);
-                flex-direction: column;
-                padding: 15px 8px;
-            }
-
-            #camera {
-                width: 100%;
-                height: 100%;
-                object-fit: cover;
-            }
-
-            .camera-container {
-                width: 100%;
-                height: 100vh;
-            }
-
-            /* Ensure buttons stay visible */
-            #capture, #recordButton, #switchCamera {
-                transform: scale(1) !important;
-            }
-        }
-
-        .fullscreen-mode {
-            width: 100vw;
-            height: 100vh;
-            margin: 0;
-            padding: 0;
-            background: #000;
-        }
-
-        .fullscreen-mode .container {
-            width: 100vw;
-            height: 100vh;
-            max-width: none;
-            margin: 0;
-            padding: 0;
-        }
-
-        .fullscreen-mode .camera-container {
-            border-radius: 0;
-        }
-
-        /* Hide system bars in fullscreen */
-        :fullscreen {
-            background: #000;
-        }
-
-        /* Lock UI orientation regardless of device orientation */
-        .button-container,
-        .zoom-controls,
-        .recording-timer {
-            transform-origin: center;
-            transition: none !important;
-        }
-
-        /* iOS specific fixes */
-        @supports (-webkit-touch-callout: none) {
-            .container {
-                height: -webkit-fill-available;
-            }
-
-            /* Lock controls in portrait orientation */
-            .button-container {
-                position: fixed;
-                bottom: max(30px, env(safe-area-inset-bottom));
-                left: 0;
-                right: 0;
-                transform: none !important;
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-
-            .zoom-controls {
-                position: fixed;
-                bottom: 120px;
-                left: 50%;
-                transform: translateX(-50%) !important;
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-
-            /* Prevent iOS rotation of UI elements */
-            @media screen and (orientation: landscape) {
-                .button-container,
-                .zoom-controls,
-                .recording-timer {
-                    transform: none !important;
-                    -webkit-transform: none !important;
-                }
-
-                #camera {
-                    width: 100vw;
-                    height: 100vh;
-                    object-fit: cover;
-                }
-            }
-        }
-
-        /* Ensure controls stay visible in safe areas */
-        @supports (padding: max(0px)) {
-            .button-container,
-            .zoom-controls {
-                padding-left: env(safe-area-inset-left);
-                padding-right: env(safe-area-inset-right);
-            }
-        }
-
-        /* Update upload button styles and handling */
-        #upload {
-            position: relative;
-            z-index: 1002; /* Ensure it's above other controls */
-            cursor: pointer;
-            pointer-events: auto;
-            opacity: 1;
-            transition: opacity 0.3s;
-        }
-
-        #upload.loading {
-            opacity: 0.7;
-            pointer-events: none;
-        }
-
-        #upload:active {
-            transform: scale(0.95);
-        }
-
-        /* iOS specific upload button fixes */
-        @supports (-webkit-touch-callout: none) {
-            .ios-device #upload {
-                -webkit-tap-highlight-color: transparent;
-                touch-action: manipulation;
-            }
-        }
-
-        #camera {
-            transition: transform 0.3s ease-out;
-        }
-
-        .camera-container {
-            overflow: hidden !important;
-        }
-
-        /* Status message positioning */
-        #statusMessage {
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            z-index: 2000;
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            text-align: center;
         }
 
         /* Safe area insets */
@@ -379,16 +155,6 @@
             .zoom-controls {
                 padding-left: env(safe-area-inset-left);
                 padding-right: env(safe-area-inset-right);
-                padding-bottom: env(safe-area-inset-bottom);
-            }
-        }
-
-        /* Ensure controls stay visible in notched devices */
-        @media screen and (orientation: landscape) {
-            .button-container,
-            .zoom-controls {
-                padding: env(safe-area-inset-top) env(safe-area-inset-right)
-                        env(safe-area-inset-bottom) env(safe-area-inset-left);
             }
         }
     </style>
@@ -937,8 +703,20 @@
             }
         });
 
+        
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const camera = document.getElementById('camera');
+            if (camera) {
+                // Prevent focus and default behaviors
+                camera.addEventListener('focus', (e) => e.preventDefault(), true);
+                camera.addEventListener('pointerdown', (e) => e.preventDefault(), true);
+                camera.addEventListener('mousedown', (e) => e.preventDefault(), true);
+                camera.addEventListener('touchstart', (e) => e.preventDefault(), true);
+            }
+        });
         // Update version
-        console.log('Camera App v1.0.0');
+        console.log('Camera App v1.0.1');
     </script>
 </body>
 </html>

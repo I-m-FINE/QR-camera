@@ -1,142 +1,68 @@
-// Google OAuth2 configuration
+// Google OAuth configuration
 const CLIENT_ID = '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com';
+const API_KEY = 'AIzaSyCiSB89a73LV0jvQJca2B6lx2slwgNFX6I'; 
 const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 const REDIRECT_URI = 'https://i-m-fine.github.io/QR-camera/';
 
-// Global status message function
-window.showStatus = function(message, duration = 3000) {
-    let statusEl = document.getElementById('statusMessage');
-    
-    if (!statusEl) {
-        statusEl = document.createElement('div');
-        statusEl.id = 'statusMessage';
-        statusEl.style.cssText = `
-            position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            background: rgba(0, 0, 0, 0.8);
-            color: white;
-            padding: 15px 20px;
-            border-radius: 8px;
-            z-index: 9999;
-            text-align: center;
-        `;
-        document.body.appendChild(statusEl);
-    }
-    
-    statusEl.textContent = message;
-    statusEl.style.display = 'block';
-    
-    setTimeout(() => {
-        statusEl.style.display = 'none';
-    }, duration);
-};
-
-// Create login UI
-function createIOSLoginUI() {
-    // Remove any existing login UI
-    const existingLogin = document.querySelector('.ios-login-container');
-    if (existingLogin) existingLogin.remove();
-
-    const container = document.createElement('div');
-    container.className = 'ios-login-container';
-    container.style.cssText = `
-        position: fixed;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        background: rgba(0, 0, 0, 0.9);
-        z-index: 9999;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-    `;
-
-    const loginBox = document.createElement('div');
-    loginBox.style.cssText = `
-        background: white;
-        padding: 20px;
-        border-radius: 12px;
-        width: 85%;
-        max-width: 300px;
-        text-align: center;
-    `;
-
-    const title = document.createElement('h3');
-    title.textContent = 'Sign in Required';
-    title.style.cssText = 'color: #333; margin-bottom: 15px;';
-
-    const text = document.createElement('p');
-    text.textContent = 'Please sign in with your Google account to enable uploads.';
-    text.style.cssText = 'color: #666; margin-bottom: 20px;';
-
-    const signInButton = document.createElement('button');
-    signInButton.textContent = 'Sign in with Google';
-    signInButton.style.cssText = `
-        background: #4285f4;
-        color: white;
-        border: none;
-        padding: 12px 24px;
-        border-radius: 24px;
-        font-weight: bold;
-        cursor: pointer;
-    `;
-
-    // Set up OAuth URL with state parameter
-    const state = Math.random().toString(36).substring(7);
-    localStorage.setItem('oauth_state', state);
-    
-    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
-        `client_id=${CLIENT_ID}` +
-        `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
-        `&response_type=token` +
-        `&scope=${encodeURIComponent(SCOPES)}` +
-        `&state=${state}`;
-
-    signInButton.onclick = () => {
-        window.location.href = authUrl;
-    };
-
-    loginBox.appendChild(title);
-    loginBox.appendChild(text);
-    loginBox.appendChild(signInButton);
-    container.appendChild(loginBox);
-    document.body.appendChild(container);
+// Initialize Google API client
+function initClient() {
+    gapi.client.init({
+        apiKey: API_KEY,
+        clientId: CLIENT_ID,
+        scope: SCOPES,
+        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"]
+    }).then(() => {
+        // Listen for sign-in state changes
+        gapi.auth2.getAuthInstance().isSignedIn.listen(updateSigninStatus);
+        // Handle the initial sign-in state
+        updateSigninStatus(gapi.auth2.getAuthInstance().isSignedIn.get());
+    }).catch(error => {
+        console.error('Error initializing GAPI client:', error);
+    });
 }
 
-// Handle OAuth callback
-window.addEventListener('load', function() {
-    if (window.location.hash) {
-        const params = new URLSearchParams(window.location.hash.substring(1));
-        const token = params.get('access_token');
-        const state = params.get('state');
-        
-        if (token && state === localStorage.getItem('oauth_state')) {
-            localStorage.setItem('googleToken', token);
-            localStorage.removeItem('oauth_state');
-            const loginUI = document.querySelector('.ios-login-container');
-            if (loginUI) loginUI.remove();
-            showStatus('Successfully signed in!', 2000);
-            
-            // Clear the hash from URL
-            history.replaceState(null, '', window.location.pathname);
-        }
+// Update UI based on sign-in status
+function updateSigninStatus(isSignedIn) {
+    if (isSignedIn) {
+        console.log('User is signed in');
+    } else {
+        console.log('User is not signed in');
+        handleAuthClick();
     }
-});
+}
 
-// Add the getAccessToken function
+// Handle login
+function handleAuthClick() {
+    gapi.auth2.getAuthInstance().signIn();
+}
+
+// Handle logout
+function handleSignoutClick() {
+    gapi.auth2.getAuthInstance().signOut();
+}
+
+// Get access token
 async function getAccessToken() {
-    const token = localStorage.getItem('googleToken');
-    if (!token) {
-        throw new Error('Not authenticated');
+    if (!gapi.auth2) {
+        await new Promise((resolve) => {
+            gapi.load('client:auth2', async () => {
+                await initClient();
+                resolve();
+            });
+        });
     }
+
+    const authInstance = gapi.auth2.getAuthInstance();
+    if (!authInstance.isSignedIn.get()) {
+        await authInstance.signIn();
+    }
+
+    const currentUser = authInstance.currentUser.get();
+    const token = currentUser.getAuthResponse().access_token;
     return token;
 }
 
-// Upload function
 async function uploadToDrive(file, type = 'image') {
     try {
         // Get the specific folder ID
@@ -173,10 +99,14 @@ async function uploadToDrive(file, type = 'image') {
 
     } catch (error) {
         console.error('Upload error:', error);
-        if (error.message.includes('Not authenticated')) {
-            // Trigger authentication flow if needed
-            if (window.createIOSLoginUI) {
-                window.createIOSLoginUI();
+        if (error.message.includes('auth') || error.message.includes('401')) {
+            // Try to re-authenticate
+            try {
+                await handleAuthClick();
+                // Retry upload after re-authentication
+                return uploadToDrive(file, type);
+            } catch (authError) {
+                showStatusMessage('Authentication failed. Please try again.');
             }
         } else {
             showStatusMessage('Upload failed: ' + error.message);
@@ -185,7 +115,27 @@ async function uploadToDrive(file, type = 'image') {
     }
 }
 
-// Make functions available globally
+function showStatusMessage(message, duration = 3000) {
+    const statusEl = document.getElementById('statusMessage') || document.createElement('div');
+    statusEl.id = 'statusMessage';
+    statusEl.style.cssText = `
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 15px 20px;
+        border-radius: 8px;
+        z-index: 9999;
+        text-align: center;
+    `;
+    statusEl.textContent = message;
+    document.body.appendChild(statusEl);
+    setTimeout(() => statusEl.remove(), duration);
+}
+
+// Export functions if using modules
 window.uploadToDrive = uploadToDrive;
-window.createIOSLoginUI = createIOSLoginUI;
-window.showStatus = showStatus;
+window.handleAuthClick = handleAuthClick;
+window.handleSignoutClick = handleSignoutClick;

@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.7.1');</script>
+    <script>console.log('Camera App v1.7.2');</script>
     <style>
         * {
             margin: 0;
@@ -497,7 +497,8 @@
 
         document.getElementById('capture').addEventListener('click', async () => {
             if (!localStorage.getItem('googleToken')) {
-                createIOSLoginUI();
+                console.log('No auth token found, showing login UI');
+                window.createIOSLoginUI();
                 return;
             }
 
@@ -508,14 +509,22 @@
             canvas.getContext('2d').drawImage(video, 0, 0);
             
             canvas.toBlob(async (blob) => {
-                utils.showStatus('Processing photo...');
-                await uploadToDrive(blob, 'image');
+                window.showStatus('Processing photo...');
+                try {
+                    await window.uploadToDrive(blob, 'image');
+                } catch (error) {
+                    console.error('Upload failed:', error);
+                    if (error.message.includes('Not authenticated')) {
+                        window.createIOSLoginUI();
+                    }
+                }
             }, 'image/jpeg', 0.95);
         });
 
         document.getElementById('recordButton').addEventListener('click', function() {
             if (!localStorage.getItem('googleToken')) {
-                createIOSLoginUI();
+                console.log('No auth token found, showing login UI');
+                window.createIOSLoginUI();
                 return;
             }
 
@@ -538,9 +547,16 @@
                     };
 
                     globals.mediaRecorder.onstop = async () => {
-                        utils.showStatus('Processing video...');
+                        window.showStatus('Processing video...');
                         const blob = new Blob(globals.recordedChunks, { type: 'video/webm' });
-                        await uploadToDrive(blob, 'video');
+                        try {
+                            await window.uploadToDrive(blob, 'video');
+                        } catch (error) {
+                            console.error('Upload failed:', error);
+                            if (error.message.includes('Not authenticated')) {
+                                window.createIOSLoginUI();
+                            }
+                        }
                         globals.recordedChunks = [];
                     };
 
@@ -552,7 +568,8 @@
                         </svg>
                     `;
                 } catch (error) {
-                    utils.handleError(error, 'Failed to start recording');
+                    console.error('Failed to start recording:', error);
+                    window.showStatus('Failed to start recording');
                 }
             } else {
                 globals.mediaRecorder.stop();
@@ -567,7 +584,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.7.1');
+        console.log('Camera App v1.7.2');
     </script>
 </body>
 </html>

@@ -1,10 +1,21 @@
 // Google OAuth configuration
 const CLIENT_ID = '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com';
-const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'; 
-let tokenClient;
-let gapiInited = false;
-let gisInited = false;
-let accessTokenPromise = null;
+const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'; // Replace with your actual folder ID
+const SERVICE_ACCOUNT_KEY = {
+    // Add your service account key JSON here
+    "type": "service_account",
+    "project_id": "your-project-id",
+    "private_key_id": "your-private-key-id",
+    "private_key": "your-private-key",
+    "client_email": "your-service-account@your-project.iam.gserviceaccount.com",
+    "client_id": "your-client-id",
+    "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+    "token_uri": "https://oauth2.googleapis.com/token",
+    "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+    "client_x509_cert_url": "your-cert-url"
+};
+
+let accessToken = null;
 
 // Helper functions
 const utils = {
@@ -29,77 +40,31 @@ const utils = {
     }
 };
 
-// Initialize the tokenClient
-function initializeGapiClient() {
-    gapi.client.init({
-        discoveryDocs: ["https://www.googleapis.com/discovery/v1/apis/drive/v3/rest"],
-    }).then(() => {
-        gapiInited = true;
-        maybeEnableButtons();
-    });
-}
+// Get service account token
+async function getServiceAccountToken() {
+    if (accessToken) {
+        return accessToken;
+    }
 
-// Initialize Google Identity Services
-function initializeGis() {
-    tokenClient = google.accounts.oauth2.initTokenClient({
-        client_id: CLIENT_ID,
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        prompt: '',
-        callback: (response) => {
-            if (response.access_token) {
-                localStorage.setItem('gapi_token', response.access_token);
-                const expiryTime = Date.now() + (response.expires_in * 1000);
-                localStorage.setItem('gapi_token_expiry', expiryTime.toString());
-                console.log('Token stored successfully');
+    try {
+        const response = await fetch('https://your-backend-url/get-token', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
             }
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to get access token');
         }
-    });
-    gisInited = true;
-    maybeEnableButtons();
-}
 
-function maybeEnableButtons() {
-    if (gapiInited && gisInited) {
-        console.log('Google APIs initialized');
+        const data = await response.json();
+        accessToken = data.access_token;
+        return accessToken;
+    } catch (error) {
+        console.error('Error getting service account token:', error);
+        throw error;
     }
-}
-
-async function getAccessToken() {
-    if (accessTokenPromise) {
-        return accessTokenPromise;
-    }
-
-    const storedToken = localStorage.getItem('gapi_token');
-    const tokenExpiry = localStorage.getItem('gapi_token_expiry');
-    
-    if (storedToken && tokenExpiry && Date.now() < parseInt(tokenExpiry)) {
-        console.log('Using stored token');
-        return storedToken;
-    }
-
-    accessTokenPromise = new Promise((resolve, reject) => {
-        try {
-            tokenClient.callback = (response) => {
-                accessTokenPromise = null;
-                if (response.error !== undefined) {
-                    reject(response);
-                    return;
-                }
-                resolve(response.access_token);
-            };
-            
-            if (!storedToken) {
-                tokenClient.requestAccessToken({ prompt: 'consent' });
-            } else {
-                tokenClient.requestAccessToken({ prompt: '' });
-            }
-        } catch (err) {
-            accessTokenPromise = null;
-            reject(err);
-        }
-    });
-
-    return accessTokenPromise;
 }
 
 async function uploadToDrive(file, type = 'image') {
@@ -114,28 +79,27 @@ async function uploadToDrive(file, type = 'image') {
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', file);
 
-        let accessToken;
+        let token;
         try {
-            accessToken = await getAccessToken();
+            token = await getServiceAccountToken();
         } catch (error) {
             console.error('Authentication error:', error);
-            utils.showMessage('Please sign in to upload');
+            utils.showMessage('Upload service unavailable');
             return;
         }
 
         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${accessToken}`,
+                'Authorization': `Bearer ${token}`,
             },
             body: form
         });
 
         if (!response.ok) {
             if (response.status === 401) {
-                localStorage.removeItem('gapi_token');
-                localStorage.removeItem('gapi_token_expiry');
-                accessTokenPromise = null;
+                // Token expired, clear and retry
+                accessToken = null;
                 return uploadToDrive(file, type);
             }
             throw new Error(`Upload failed: ${response.statusText}`);
@@ -152,12 +116,6 @@ async function uploadToDrive(file, type = 'image') {
         throw error;
     }
 }
-
-// Initialize the Google APIs
-document.addEventListener('DOMContentLoaded', () => {
-    gapi.load('client', initializeGapiClient);
-    initializeGis();
-});
 
 // Export functions and utils
 window.uploadToDrive = uploadToDrive;

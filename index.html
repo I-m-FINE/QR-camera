@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.8.1');</script>
+    <script>console.log('Camera App v1.8.2');</script>
     <style>
         * {
             margin: 0;
@@ -112,12 +112,10 @@
             background: rgba(0, 0, 0, 0.5);
             padding: 8px 15px;
             border-radius: 20px;
-            display: flex;
+            display: none;
             align-items: center;
             gap: 15px;
             z-index: 1000;
-            min-width: 120px;
-            justify-content: space-between;
         }
 
         .zoom-controls button {
@@ -127,20 +125,12 @@
             font-size: 24px;
             padding: 5px 10px;
             cursor: pointer;
-            outline: none;
-            width: 40px;
-            height: 40px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            -webkit-tap-highlight-color: transparent;
         }
 
         .zoom-controls span {
             color: white;
-            min-width: 50px;
+            min-width: 40px;
             text-align: center;
-            font-size: 16px;
         }
 
         /* Media query for different screen sizes */
@@ -375,7 +365,7 @@
 
     <script src="drive-upload.js"></script>
     <script>
-        // Single source of truth for global variables
+        // Basic globals setup
         const globals = {
             mediaRecorder: null,
             recordedChunks: [],
@@ -389,110 +379,7 @@
             zoomStep: 0.5
         };
 
-        // Utility functions
-        const utils = {
-            cleanupMediaStream: (stream) => {
-                if (stream) {
-                    stream.getTracks().forEach(track => track.stop());
-                }
-            },
-            
-            handleError: (error, message) => {
-                console.error(`[${new Date().toISOString()}] ${message}:`, error);
-                showStatus(message, 5000);
-            },
-            
-            showStatus: (message, duration = 3000) => {
-                const statusEl = document.getElementById('statusMessage');
-                if (!statusEl) {
-                    const div = document.createElement('div');
-                    div.id = 'statusMessage';
-                    div.style.cssText = `
-                        position: fixed;
-                        top: 50%;
-                        left: 50%;
-                        transform: translate(-50%, -50%);
-                        background: rgba(0, 0, 0, 0.8);
-                        color: white;
-                        padding: 15px 20px;
-                        border-radius: 8px;
-                        z-index: 9999;
-                        text-align: center;
-                    `;
-                    document.body.appendChild(div);
-                }
-                
-                statusEl.textContent = message;
-                statusEl.style.display = 'block';
-                
-                setTimeout(() => {
-                    statusEl.style.display = 'none';
-                }, duration);
-            }
-        };
-
-        // Update the iOS permission handling function
-        async function requestIOSPermissions() {
-            console.log('Requesting iOS permissions...');
-            
-            try {
-                // First, request both permissions simultaneously
-                const constraints = {
-                    video: {
-                        facingMode: 'environment',
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: true
-                };
-
-                // Show explicit message for iOS users
-                showStatusMessage('Please allow camera AND microphone access when prompted', 5000);
-
-                // Request both permissions
-                const combinedStream = await navigator.mediaDevices.getUserMedia(constraints);
-                
-                // Verify if we got both audio and video tracks
-                const hasVideo = combinedStream.getVideoTracks().length > 0;
-                const hasAudio = combinedStream.getAudioTracks().length > 0;
-
-                console.log('Permissions granted - Video:', hasVideo, 'Audio:', hasAudio);
-
-                if (!hasAudio) {
-                    // If audio track is missing, try to request it separately
-                    showStatusMessage('Please allow microphone access when prompted', 3000);
-                    try {
-                        const audioStream = await navigator.mediaDevices.getUserMedia({ 
-                            audio: true,
-                            video: false 
-                        });
-                        
-                        // Add audio tracks to the combined stream
-                        audioStream.getAudioTracks().forEach(track => {
-                            combinedStream.addTrack(track);
-                        });
-                    } catch (audioError) {
-                        console.error('Failed to get audio permission:', audioError);
-                        showStatusMessage('Microphone access denied. Video will be recorded without sound.', 3000);
-                    }
-                }
-
-                return combinedStream;
-
-            } catch (error) {
-                console.error('iOS Permission Error:', error);
-                
-                if (error.name === 'NotAllowedError') {
-                    showStatusMessage('Please enable camera and microphone access in iOS Settings > Safari > ' + window.location.hostname, 5000);
-                } else {
-                    showStatusMessage('Permission error: ' + error.message);
-                }
-                
-                throw error;
-            }
-        }
-
-        // Update startCamera function to handle iOS permissions better
+        // Basic camera initialization
         async function startCamera(facingMode = 'environment') {
             console.log('Starting camera initialization...');
             
@@ -514,43 +401,20 @@
                     globals.currentStream.getTracks().forEach(track => track.stop());
                 }
 
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                
-                let stream;
-                if (isIOS) {
-                    stream = await requestIOSPermissions();
-                    
-                    // Check permissions after stream is obtained
-                    const hasVideo = stream.getVideoTracks().length > 0;
-                    const hasAudio = stream.getAudioTracks().length > 0;
-                    
-                    if (!hasVideo || !hasAudio) {
-                        const missing = [];
-                        if (!hasVideo) missing.push('camera');
-                        if (!hasAudio) missing.push('microphone');
-                        
-                        showStatusMessage(`Missing ${missing.join(' and ')} permissions. Please check iOS Settings.`, 4000);
-                    }
-                } else {
-                    // Normal permission handling for other devices
-                    const constraints = {
-                        video: {
-                            facingMode: facingMode,
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        },
-                        audio: true
-                    };
+                const constraints = {
+                    video: {
+                        facingMode: facingMode,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                };
 
-                    stream = await navigator.mediaDevices.getUserMedia(constraints);
-                }
-
-                // Set up video element with the stream
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
                 globals.currentStream = stream;
                 globals.currentFacingMode = facingMode;
 
-                // Wait for video to be ready
                 await new Promise((resolve, reject) => {
                     video.onloadedmetadata = () => {
                         video.play()
@@ -562,45 +426,74 @@
                             .catch(reject);
                     };
                     video.onerror = reject;
-                    setTimeout(() => reject(new Error('Video loading timeout')), 10000);
                 });
 
+                // Initialize zoom controls after camera is started
+                initializeZoomControls();
+
             } catch (error) {
-                console.error('Camera/Audio initialization failed:', error);
-                handleIOSPermissionError(error);
+                console.error('Camera initialization failed:', error);
+                showStatusMessage('Camera error: ' + error.message);
+                globals.isCameraRunning = false;
             } finally {
                 globals.isInitializing = false;
             }
+        }
 
-            try {
-                // After successfully starting the camera
-                await initializeZoomControls();
-            } catch (error) {
-                console.error('Failed to initialize zoom controls:', error);
+        // Simple zoom controls
+        function initializeZoomControls() {
+            const zoomControls = document.querySelector('.zoom-controls');
+            const track = globals.currentStream?.getVideoTracks()[0];
+            
+            if (!track || !track.getCapabilities) {
+                zoomControls.style.display = 'none';
+                return;
+            }
+
+            const capabilities = track.getCapabilities();
+            
+            if (!capabilities.zoom) {
+                zoomControls.style.display = 'none';
+                return;
+            }
+
+            zoomControls.style.display = 'flex';
+            
+            document.getElementById('zoomIn').onclick = () => {
+                globals.currentZoom = Math.min(globals.currentZoom + globals.zoomStep, globals.maxZoom);
+                updateZoom();
+            };
+
+            document.getElementById('zoomOut').onclick = () => {
+                globals.currentZoom = Math.max(globals.currentZoom - globals.zoomStep, globals.minZoom);
+                updateZoom();
+            };
+        }
+
+        function updateZoom() {
+            const track = globals.currentStream?.getVideoTracks()[0];
+            if (track && track.getCapabilities()?.zoom) {
+                track.applyConstraints({
+                    advanced: [{ zoom: globals.currentZoom }]
+                });
+                document.getElementById('zoomLevel').textContent = `${globals.currentZoom.toFixed(1)}x`;
             }
         }
 
-        // Add helper function for iOS permission errors
-        function handleIOSPermissionError(error) {
-            if (error.name === 'NotAllowedError') {
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                if (isIOS) {
-                    showStatusMessage(
-                        'Please enable camera and microphone access:\n' +
-                        '1. Go to iOS Settings\n' +
-                        '2. Scroll down to Your Browser\n' +
-                        '3. Find Camera & Microphone\n' +
-                        '4. Allow access for this website',
-                        8000
-                    );
-                } else {
-                    showStatusMessage('Please allow camera and microphone access');
-                }
-            } else {
-                showStatusMessage('Camera error: ' + error.message);
+        // Switch camera function
+        document.getElementById('switchCamera').addEventListener('click', async () => {
+            if (globals.mediaRecorder?.state === 'recording') {
+                globals.mediaRecorder.stop();
             }
-            globals.isCameraRunning = false;
-        }
+
+            globals.currentFacingMode = globals.currentFacingMode === 'environment' ? 'user' : 'environment';
+            await startCamera(globals.currentFacingMode);
+        });
+
+        // Start camera when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            startCamera();
+        });
 
         // Event Listeners
         document.addEventListener('DOMContentLoaded', async () => {
@@ -903,148 +796,8 @@
             }
         });
 
-        
-
-        // Add these zoom control functions
-        async function initializeZoomControls() {
-            try {
-                const track = globals.currentStream?.getVideoTracks()[0];
-                if (!track) return;
-
-                const capabilities = track.getCapabilities();
-                const settings = track.getSettings();
-                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-
-                // For iOS, we'll use a different approach since capabilities.zoom might not be supported
-                if (isIOS) {
-                    // Set default zoom range for iOS
-                    globals.minZoom = 1;
-                    globals.maxZoom = 3; // iOS typically supports up to 3x zoom
-                    globals.currentZoom = 1;
-                    
-                    try {
-                        // Try to set initial zoom constraints for iOS
-                        await track.applyConstraints({
-                            advanced: [{
-                                zoom: 1.0
-                            }]
-                        });
-                        
-                        // If we get here, zoom is supported
-                        document.querySelector('.zoom-controls').style.display = 'flex';
-                        updateZoomUI();
-                        
-                        // Add iOS-specific zoom handlers
-                        document.getElementById('zoomIn').addEventListener('click', () => {
-                            setZoomIOS(globals.currentZoom + globals.zoomStep);
-                        });
-
-                        document.getElementById('zoomOut').addEventListener('click', () => {
-                            setZoomIOS(globals.currentZoom - globals.zoomStep);
-                        });
-
-                        // Add pinch zoom support for iOS
-                        const camera = document.getElementById('camera');
-                        let initialDistance = 0;
-                        let currentZoom = globals.currentZoom;
-                        
-                        camera.addEventListener('touchstart', (e) => {
-                            if (e.touches.length === 2) {
-                                e.preventDefault();
-                                initialDistance = getDistance(e.touches[0], e.touches[1]);
-                                currentZoom = globals.currentZoom;
-                            }
-                        }, { passive: false });
-
-                        camera.addEventListener('touchmove', (e) => {
-                            if (e.touches.length === 2) {
-                                e.preventDefault();
-                                const distance = getDistance(e.touches[0], e.touches[1]);
-                                const scale = distance / initialDistance;
-                                const newZoom = Math.max(globals.minZoom, 
-                                    Math.min(globals.maxZoom, currentZoom * scale));
-                                setZoomIOS(newZoom);
-                            }
-                        }, { passive: false });
-
-                    } catch (error) {
-                        console.log('iOS zoom not supported on this device:', error);
-                        document.querySelector('.zoom-controls').style.display = 'none';
-                    }
-                } else {
-                    // Non-iOS devices
-                    if (!capabilities.zoom) {
-                        console.log('Zoom not supported on this device');
-                        document.querySelector('.zoom-controls').style.display = 'none';
-                        return;
-                    }
-
-                    globals.minZoom = capabilities.zoom.min || 1;
-                    globals.maxZoom = capabilities.zoom.max || 10;
-                    globals.currentZoom = settings.zoom || 1;
-
-                    updateZoomUI();
-                    // ... rest of the non-iOS zoom code ...
-                }
-
-            } catch (error) {
-                console.error('Error initializing zoom:', error);
-                document.querySelector('.zoom-controls').style.display = 'none';
-            }
-        }
-
-        // Add iOS-specific zoom function
-        async function setZoomIOS(zoomLevel) {
-            try {
-                const track = globals.currentStream?.getVideoTracks()[0];
-                if (!track) return;
-
-                // Ensure zoom level is within iOS bounds
-                zoomLevel = Math.max(globals.minZoom, Math.min(globals.maxZoom, zoomLevel));
-                
-                // Apply zoom for iOS
-                await track.applyConstraints({
-                    advanced: [{
-                        zoom: zoomLevel
-                    }]
-                });
-
-                globals.currentZoom = zoomLevel;
-                updateZoomUI();
-
-            } catch (error) {
-                console.error('Error setting iOS zoom:', error);
-            }
-        }
-
-        // Update the getDistance function to be more precise for iOS
-        function getDistance(touch1, touch2) {
-            const dx = touch1.clientX - touch2.clientX;
-            const dy = touch1.clientY - touch2.clientY;
-            return Math.sqrt(dx * dx + dy * dy);
-        }
-
-        // Update the updateZoomUI function to be more responsive
-        function updateZoomUI() {
-            const zoomLevel = document.getElementById('zoomLevel');
-            if (zoomLevel) {
-                zoomLevel.textContent = `${globals.currentZoom.toFixed(1)}x`;
-            }
-        }
-
-        // Make sure to call initializeZoomControls after camera switch and startup
-        async function startCamera(facingMode = 'environment') {
-            // ... existing camera initialization code ...
-
-            try {
-                await initializeZoomControls();
-            } catch (error) {
-                console.error('Failed to initialize zoom controls:', error);
-            }
-        }
-
         // Update version
-        console.log('Camera App v1.8.1');
+        console.log('Camera App v1.8.2');
     </script>
 </body>
 </html>

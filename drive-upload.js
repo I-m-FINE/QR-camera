@@ -127,6 +127,15 @@ window.addEventListener('load', function() {
     }
 });
 
+// Add the getAccessToken function
+async function getAccessToken() {
+    const token = localStorage.getItem('googleToken');
+    if (!token) {
+        throw new Error('Not authenticated');
+    }
+    return token;
+}
+
 // Upload function
 async function uploadToDrive(file, type = 'image') {
     try {
@@ -136,7 +145,7 @@ async function uploadToDrive(file, type = 'image') {
         const metadata = {
             name: `${type}_${new Date().toISOString()}.${type === 'image' ? 'jpg' : 'mp4'}`,
             mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
-            parents: [folderId] // This ensures the file is only stored in the specific folder
+            parents: [folderId]
         };
 
         const form = new FormData();
@@ -164,7 +173,14 @@ async function uploadToDrive(file, type = 'image') {
 
     } catch (error) {
         console.error('Upload error:', error);
-        showStatusMessage('Upload failed: ' + error.message);
+        if (error.message.includes('Not authenticated')) {
+            // Trigger authentication flow if needed
+            if (window.createIOSLoginUI) {
+                window.createIOSLoginUI();
+            }
+        } else {
+            showStatusMessage('Upload failed: ' + error.message);
+        }
         throw error;
     }
 }

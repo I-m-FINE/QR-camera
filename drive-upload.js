@@ -4,13 +4,15 @@ const SCOPES = 'https://www.googleapis.com/auth/drive.file';
 const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 const REDIRECT_URI = 'https://i-m-fine.github.io/QR-camera/';
 
-// Function to show status messages (moved from main file)
+// Global status message function
 function showStatus(message, duration = 3000) {
-    const statusEl = document.getElementById('statusMessage');
+    let statusEl = document.getElementById('statusMessage');
+    
+    // Create status element if it doesn't exist
     if (!statusEl) {
-        const div = document.createElement('div');
-        div.id = 'statusMessage';
-        div.style.cssText = `
+        statusEl = document.createElement('div');
+        statusEl.id = 'statusMessage';
+        statusEl.style.cssText = `
             position: fixed;
             top: 50%;
             left: 50%;
@@ -22,7 +24,7 @@ function showStatus(message, duration = 3000) {
             z-index: 9999;
             text-align: center;
         `;
-        document.body.appendChild(div);
+        document.body.appendChild(statusEl);
     }
     
     statusEl.textContent = message;
@@ -33,8 +35,9 @@ function showStatus(message, duration = 3000) {
     }, duration);
 }
 
-// Create an iOS-native friendly login UI
+// Create login UI
 function createIOSLoginUI() {
+    // Remove any existing login UI
     const existingLogin = document.querySelector('.ios-login-container');
     if (existingLogin) existingLogin.remove();
 
@@ -68,7 +71,7 @@ function createIOSLoginUI() {
     title.style.cssText = 'color: #333; margin-bottom: 15px;';
 
     const text = document.createElement('p');
-    text.textContent = 'To enable automatic upload of photos and videos, please sign in with your Google account.';
+    text.textContent = 'Please sign in with your Google account to enable uploads.';
     text.style.cssText = 'color: #666; margin-bottom: 20px;';
 
     const signInButton = document.createElement('button');
@@ -83,12 +86,16 @@ function createIOSLoginUI() {
         cursor: pointer;
     `;
 
-    // Set up OAuth URL
+    // Set up OAuth URL with state parameter
+    const state = Math.random().toString(36).substring(7);
+    localStorage.setItem('oauth_state', state);
+    
     const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?` +
         `client_id=${CLIENT_ID}` +
         `&redirect_uri=${encodeURIComponent(REDIRECT_URI)}` +
         `&response_type=token` +
-        `&scope=${encodeURIComponent(SCOPES)}`;
+        `&scope=${encodeURIComponent(SCOPES)}` +
+        `&state=${state}`;
 
     signInButton.onclick = () => {
         window.location.href = authUrl;
@@ -106,41 +113,48 @@ window.addEventListener('load', function() {
     if (window.location.hash) {
         const params = new URLSearchParams(window.location.hash.substring(1));
         const token = params.get('access_token');
-        if (token) {
+        const state = params.get('state');
+        
+        if (token && state === localStorage.getItem('oauth_state')) {
             localStorage.setItem('googleToken', token);
+            localStorage.removeItem('oauth_state');
             const loginUI = document.querySelector('.ios-login-container');
             if (loginUI) loginUI.remove();
             showStatus('Successfully signed in!', 2000);
+            
+            // Clear the hash from URL
+            history.replaceState(null, '', window.location.pathname);
         }
     }
 });
 
 // Upload function
 async function uploadToDrive(blob, type = 'image') {
-    try {
-        const token = localStorage.getItem('googleToken');
-        if (!token) {
-            createIOSLoginUI();
-            return;
-        }
+    const token = localStorage.getItem('googleToken');
+    
+    if (!token) {
+        console.log('No authentication token found, showing login UI');
+        createIOSLoginUI();
+        throw new Error('Not authenticated with Google Drive');
+    }
 
+    try {
+        showStatus('Uploading ' + type + '...');
+        
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         const fileExtension = type === 'video' ? '.webm' : '.jpg';
         const fileName = `${type}_${timestamp}${fileExtension}`;
         
-        // Create metadata with specific folder ID
         const metadata = {
             name: fileName,
             mimeType: type === 'video' ? 'video/webm' : 'image/jpeg',
-            parents: [FOLDER_ID] // Specify the folder ID here
+            parents: [FOLDER_ID]
         };
 
-        // Create multipart form data
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', blob);
 
-        // Upload to Drive
         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
             method: 'POST',
             headers: {
@@ -150,7 +164,13 @@ async function uploadToDrive(blob, type = 'image') {
         });
 
         if (!response.ok) {
-            throw new Error(`Upload failed: ${response.status}`);
+            const errorData = await response.json();
+            if (response.status === 401) {
+                localStorage.removeItem('googleToken');
+                createIOSLoginUI();
+                throw new Error('Authentication expired. Please sign in again.');
+            }
+            throw new Error(errorData.error.message || 'Upload failed');
         }
 
         const result = await response.json();
@@ -160,18 +180,12 @@ async function uploadToDrive(blob, type = 'image') {
 
     } catch (error) {
         console.error('Upload error:', error);
-        if (error.message.includes('401')) {
-            // Token expired or invalid
-            localStorage.removeItem('googleToken');
-            createIOSLoginUI();
-        } else {
-            showStatus('Upload failed: ' + error.message, 3000);
-        }
+        showStatus('Upload failed: ' + error.message, 3000);
         throw error;
     }
 }
 
-// Export the necessary functions
+// Make functions available globally
 window.uploadToDrive = uploadToDrive;
 window.createIOSLoginUI = createIOSLoginUI;
 window.showStatus = showStatus;

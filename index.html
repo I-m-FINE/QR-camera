@@ -2,10 +2,11 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.6.6');</script>
+    <script>console.log('Camera App v1.6.7');</script>
     <style>
         * {
             margin: 0;
@@ -1437,8 +1438,155 @@
             initializeCamera();
         }
 
+        
+
+        // Add this at the beginning of your script section in index.html
+        async function requestCameraPermission() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: false
+                });
+                return stream;
+            } catch (error) {
+                console.error('Camera permission error:', error);
+                showStatus('Please allow camera access and refresh the page');
+                return null;
+            }
+        }
+
+        async function startCamera(facingMode = 'environment') {
+            console.log('Starting camera initialization...');
+            
+            if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+                showStatus('Camera API not supported in this browser');
+                return;
+            }
+
+            try {
+                const video = document.getElementById('camera');
+                if (!video) {
+                    console.error('Video element not found');
+                    return;
+                }
+
+                // Stop any existing streams
+                if (currentStream) {
+                    currentStream.getTracks().forEach(track => {
+                        track.stop();
+                    });
+                }
+
+                // Basic constraints first
+                let constraints = {
+                    video: {
+                        facingMode: facingMode
+                    },
+                    audio: false
+                };
+
+                console.log('Requesting camera with constraints:', constraints);
+                
+                // Request camera access
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Attach stream to video element
+                video.srcObject = stream;
+                currentStream = stream;
+                
+                // Wait for video to be ready
+                await new Promise((resolve) => {
+                    video.onloadedmetadata = () => {
+                        video.play().then(resolve).catch(e => {
+                            console.error('Video play error:', e);
+                            resolve(); // Continue even if autoplay fails
+                        });
+                    };
+                });
+
+                console.log('Camera started successfully');
+                isCameraRunning = true;
+
+            } catch (error) {
+                console.error('Camera start error:', error);
+                
+                // Show user-friendly error message
+                if (error.name === 'NotAllowedError') {
+                    showStatus('Camera access denied. Please allow camera access and refresh the page.');
+                } else if (error.name === 'NotFoundError') {
+                    showStatus('No camera found on this device.');
+                } else {
+                    showStatus('Camera error: ' + error.message);
+                }
+                
+                isCameraRunning = false;
+            }
+        }
+
+        // Update initialization
+        document.addEventListener('DOMContentLoaded', async () => {
+            console.log('Page loaded, requesting camera...');
+            
+            // First request camera permission
+            const permission = await requestCameraPermission();
+            if (permission) {
+                // Then start camera
+                await startCamera();
+                
+                // Add device class for iOS
+                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                    document.body.classList.add('ios-device');
+                }
+            }
+        });
+
+        // Add visibility change handler
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                if (!isCameraRunning) {
+                    console.log('Page visible, restarting camera...');
+                    startCamera(currentFacingMode);
+                }
+            } else {
+                if (currentStream) {
+                    console.log('Page hidden, stopping camera...');
+                    currentStream.getTracks().forEach(track => track.stop());
+                    isCameraRunning = false;
+                }
+            }
+        });
+
+        // Add a helper function to show status messages
+        function showStatus(message, duration = 3000) {
+            const statusEl = document.getElementById('statusMessage');
+            if (!statusEl) {
+                const div = document.createElement('div');
+                div.id = 'statusMessage';
+                div.style.cssText = `
+                    position: fixed;
+                    top: 50%;
+                    left: 50%;
+                    transform: translate(-50%, -50%);
+                    background: rgba(0, 0, 0, 0.8);
+                    color: white;
+                    padding: 15px 20px;
+                    border-radius: 8px;
+                    z-index: 9999;
+                    text-align: center;
+                `;
+                document.body.appendChild(div);
+            }
+            
+            const status = document.getElementById('statusMessage');
+            status.textContent = message;
+            status.style.display = 'block';
+            
+            setTimeout(() => {
+                status.style.display = 'none';
+            }, duration);
+        }
         // Update version
-        console.log('Camera App v1.6.6');
+        console.log('Camera App v1.6.7');
     </script>
 </body>
 </html>

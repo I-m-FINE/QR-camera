@@ -128,58 +128,75 @@ window.addEventListener('load', function() {
 });
 
 // Upload function
-async function uploadToDrive(blob, type = 'image') {
-    const token = localStorage.getItem('googleToken');
-    
-    if (!token) {
-        console.log('No authentication token found, showing login UI');
-        createIOSLoginUI();
-        throw new Error('Not authenticated with Google Drive');
-    }
+async function uploadToDrive(file, type = 'image') {
+    const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'; // Replace with your main folder ID
+    const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF'; // Replace with your backup folder ID
 
     try {
-        showStatus('Uploading ' + type + '...');
-        
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileExtension = type === 'video' ? '.webm' : '.jpg';
-        const fileName = `${type}_${timestamp}${fileExtension}`;
-        
-        const metadata = {
-            name: fileName,
-            mimeType: type === 'video' ? 'video/webm' : 'image/jpeg',
-            parents: [FOLDER_ID]
+        // Create base metadata
+        const baseMetadata = {
+            name: `${type}_${new Date().toISOString()}.${type === 'image' ? 'jpg' : 'mp4'}`,
+            mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4'
         };
 
-        const form = new FormData();
-        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', blob);
-
-        const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: {
-                'Authorization': `Bearer ${token}`
-            },
-            body: form
-        });
-
-        if (!response.ok) {
-            const errorData = await response.json();
-            if (response.status === 401) {
-                localStorage.removeItem('googleToken');
-                createIOSLoginUI();
-                throw new Error('Authentication expired. Please sign in again.');
-            }
-            throw new Error(errorData.error.message || 'Upload failed');
+        // Get access token
+        let token;
+        try {
+            token = await getAccessToken();
+        } catch (error) {
+            console.error('Authentication error:', error);
+            utils.showMessage('Please sign in to upload');
+            return;
         }
 
-        const result = await response.json();
-        console.log('Upload successful:', result);
-        showStatus('Upload complete!', 2000);
-        return result;
+        // Upload to both folders simultaneously
+        const uploadPromises = [MAIN_FOLDER_ID, BACKUP_FOLDER_ID].map(async (folderId) => {
+            const metadata = {
+                ...baseMetadata,
+                parents: [folderId]
+            };
+
+            const form = new FormData();
+            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+            form.append('file', file);
+
+            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                },
+                body: form
+            });
+
+            if (!response.ok) {
+                if (response.status === 401) {
+                    // Token expired
+                    accessToken = null;
+                    throw new Error('Token expired');
+                }
+                throw new Error(`Upload failed to ${folderId}: ${response.statusText}`);
+            }
+
+            return await response.json();
+        });
+
+        try {
+            const results = await Promise.all(uploadPromises);
+            console.log('Files uploaded successfully:', results);
+            utils.showMessage('Upload complete to both folders', 2000);
+            return results;
+        } catch (error) {
+            if (error.message.includes('Token expired')) {
+                // Retry once with new token
+                accessToken = null;
+                return uploadToDrive(file, type);
+            }
+            throw error;
+        }
 
     } catch (error) {
         console.error('Upload error:', error);
-        showStatus('Upload failed: ' + error.message, 3000);
+        utils.showMessage('Upload failed: ' + error.message);
         throw error;
     }
 }

@@ -60,31 +60,7 @@ window.uploadToDrive = async function(file, type = 'image') {
     const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
     const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF';
 
-    async function validateFolder(folderId) {
-        try {
-            const response = await fetch(
-                `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name,mimeType`, {
-                headers: { 'Authorization': `Bearer ${await window.getAccessToken()}` }
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Folder validation failed for ID: ${folderId}`);
-            }
-            
-            const folder = await response.json();
-            return folder.mimeType === 'application/vnd.google-apps.folder';
-        } catch (error) {
-            console.error(`Folder validation error for ${folderId}:`, error);
-            return false;
-        }
-    }
-
     async function singleUpload(folderId, isBackup) {
-        const isValidFolder = await validateFolder(folderId);
-        if (!isValidFolder) {
-            throw new Error(`Invalid or inaccessible ${isBackup ? 'backup' : 'main'} folder: ${folderId}`);
-        }
-
         console.log(`Starting upload to ${isBackup ? 'backup' : 'main'} folder: ${folderId}`);
         
         const metadata = {
@@ -92,6 +68,8 @@ window.uploadToDrive = async function(file, type = 'image') {
             mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
             parents: [folderId]
         };
+
+        console.log(`Metadata for ${isBackup ? 'backup' : 'main'} upload:`, metadata);
 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -116,7 +94,7 @@ window.uploadToDrive = async function(file, type = 'image') {
 
     try {
         const mainResult = await singleUpload(MAIN_FOLDER_ID, false);
-        console.log('Main upload completed successfully');
+        console.log('Main upload completed');
 
         try {
             const backupResult = await singleUpload(BACKUP_FOLDER_ID, true);

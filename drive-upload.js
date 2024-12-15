@@ -58,83 +58,80 @@ window.getAccessToken = async function() {
 // Export upload function
 window.uploadToDrive = async function(file, type = 'image') {
     const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
-    const BACKUP_FOLDER_ID = '1Hs_YPCwGq_YZPgxhR_Wd5YlGcBxXYZ12'; // Replace with your actual backup folder ID
+    const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF';
 
-    async function singleUpload(folderId, isBackup) {
+    async function validateFolder(folderId) {
         try {
-            console.log(`Starting upload to ${isBackup ? 'backup' : 'main'} folder: ${folderId}`);
-            
-            const metadata = {
-                name: `${type}_${new Date().toISOString()}${isBackup ? '_backup' : ''}.${type === 'image' ? 'jpg' : 'mp4'}`,
-                mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
-                parents: [folderId]
-            };
-
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', file);
-
-            const token = await window.getAccessToken();
-            if (!token) {
-                throw new Error('No access token available');
-            }
-
-            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                method: 'POST',
-                headers: { 'Authorization': `Bearer ${token}` },
-                body: form
+            const response = await fetch(
+                `https://www.googleapis.com/drive/v3/files/${folderId}?fields=id,name,mimeType`, {
+                headers: { 'Authorization': `Bearer ${await window.getAccessToken()}` }
             });
-
+            
             if (!response.ok) {
-                const errorText = await response.text();
-                throw new Error(`Upload failed (${response.status}): ${errorText}`);
+                throw new Error(`Folder validation failed for ID: ${folderId}`);
             }
-
-            const result = await response.json();
-            console.log(`Upload successful to ${isBackup ? 'backup' : 'main'} folder:`, result);
-            return result;
+            
+            const folder = await response.json();
+            return folder.mimeType === 'application/vnd.google-apps.folder';
         } catch (error) {
-            console.error(`Error in ${isBackup ? 'backup' : 'main'} upload:`, error);
-            throw error;
+            console.error(`Folder validation error for ${folderId}:`, error);
+            return false;
         }
     }
 
-    let mainResult = null;
-    let backupResult = null;
-    let error = null;
-
-    try {
-        // Try main upload first
-        mainResult = await singleUpload(MAIN_FOLDER_ID, false);
-        console.log('Main upload completed successfully');
-
-        // Then try backup upload
-        try {
-            backupResult = await singleUpload(BACKUP_FOLDER_ID, true);
-            console.log('Backup upload completed successfully');
-        } catch (backupError) {
-            console.error('Backup upload failed:', backupError);
-            // Don't throw here, we still want to return the main upload result
-            error = backupError;
+    async function singleUpload(folderId, isBackup) {
+        const isValidFolder = await validateFolder(folderId);
+        if (!isValidFolder) {
+            throw new Error(`Invalid or inaccessible ${isBackup ? 'backup' : 'main'} folder: ${folderId}`);
         }
 
-        // Show appropriate message
-        if (mainResult && backupResult) {
-            window.utils.showMessage('Files uploaded successfully to both folders', 2000);
-        } else if (mainResult) {
-            window.utils.showMessage('File uploaded to main folder only', 2000);
-        }
-
-        return {
-            main: mainResult,
-            backup: backupResult,
-            error: error
+        console.log(`Starting upload to ${isBackup ? 'backup' : 'main'} folder: ${folderId}`);
+        
+        const metadata = {
+            name: `${type}_${new Date().toISOString()}${isBackup ? '_backup' : ''}.${type === 'image' ? 'jpg' : 'mp4'}`,
+            mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
+            parents: [folderId]
         };
 
-    } catch (mainError) {
-        console.error('Main upload failed:', mainError);
-        window.utils.showMessage('Upload failed: ' + mainError.message);
-        throw mainError;
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+
+        const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${await window.getAccessToken()}` },
+            body: form
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            console.error(`Upload failed for ${isBackup ? 'backup' : 'main'} folder:`, errorText);
+            throw new Error(`Upload failed for ${isBackup ? 'backup' : 'main'} folder: ${response.statusText}`);
+        }
+
+        const result = await response.json();
+        console.log(`Upload successful to ${isBackup ? 'backup' : 'main'} folder:`, result);
+        return result;
+    }
+
+    try {
+        const mainResult = await singleUpload(MAIN_FOLDER_ID, false);
+        console.log('Main upload completed successfully');
+
+        try {
+            const backupResult = await singleUpload(BACKUP_FOLDER_ID, true);
+            console.log('Backup upload completed successfully');
+            window.utils.showMessage('Files uploaded successfully to both folders', 2000);
+            return { main: mainResult, backup: backupResult };
+        } catch (backupError) {
+            console.warn('Backup upload failed:', backupError);
+            window.utils.showMessage('File uploaded to main folder only', 2000);
+            return { main: mainResult, backup: null, backupError };
+        }
+    } catch (error) {
+        console.error('Upload process error:', error);
+        window.utils.showMessage('Upload failed: ' + error.message);
+        throw error;
     }
 };
 

@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-09');</script>
+    <script>console.log('Camera App v1.0.5-10');</script>
     <style>
         /* Reset default styles */
         * {
@@ -600,62 +600,34 @@
             }
         });
 
-        function requestIOSPermissions() {
-            return new Promise(async (resolve, reject) => {
-                try {
-                    // Request camera and microphone permissions explicitly
-                    const stream = await navigator.mediaDevices.getUserMedia({ 
-                        video: true, 
-                        audio: true 
-                    });
-                    stream.getTracks().forEach(track => track.stop()); // Stop the test stream
-                    resolve(true);
-                } catch (error) {
-                    console.error('iOS permission error:', error);
-                    showStatusMessage('Please allow camera access in Settings');
-                    reject(error);
-                }
-            });
-        }
-
-        // Add this helper function for iOS authentication
+        // Simplified iOS authentication handler
         async function handleIOSAuth() {
             console.log('Handling iOS authentication...');
             try {
-                // Clear any existing timeouts
-                if (window.iosAuthTimeout) {
-                    clearTimeout(window.iosAuthTimeout);
-                }
-
-                // Show loading message
-                showStatusMessage('Preparing camera...');
-
-                // Request permissions first
-                await requestIOSPermissions();
-
-                // Check authentication
+                // Only check for Google authentication
                 if (!localStorage.getItem('googleToken')) {
                     console.log('No auth token found, initiating login...');
-                    showStatusMessage('Please sign in...');
+                    showStatusMessage('Please sign in to Google...');
                     
                     // Create a promise that resolves when authentication is complete
                     const authPromise = new Promise((resolve, reject) => {
-                        window.iosAuthCallback = (success) => {
-                            if (success) resolve();
-                            else reject(new Error('Authentication failed'));
-                        };
-                        
-                        // Set a timeout for auth
-                        window.iosAuthTimeout = setTimeout(() => {
-                            reject(new Error('Authentication timeout'));
-                        }, 30000); // 30 second timeout
-                        
-                        // Trigger login UI
-                        if (window.createIOSLoginUI) {
-                            window.createIOSLoginUI();
-                        } else {
-                            reject(new Error('Login UI not available'));
-                        }
+                        // Force the Google Sign-In popup
+                        google.accounts.oauth2.initTokenClient({
+                            client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
+                            scope: 'https://www.googleapis.com/auth/drive.file',
+                            callback: (response) => {
+                                if (response.access_token) {
+                                    localStorage.setItem('googleToken', response.access_token);
+                                    resolve(true);
+                                } else {
+                                    reject(new Error('Google Sign-In failed'));
+                                }
+                            },
+                            error_callback: (error) => {
+                                console.error('Google Sign-In error:', error);
+                                reject(error);
+                            }
+                        }).requestAccessToken();
                     });
 
                     await authPromise;
@@ -663,10 +635,8 @@
 
                 return true;
             } catch (error) {
-                console.error('iOS auth error:', error);
-                showStatusMessage(error.message === 'Authentication timeout' ? 
-                    'Sign in timed out. Please try again.' : 
-                    'Please allow camera access and sign in');
+                console.error('Auth error:', error);
+                showStatusMessage('Please sign in to Google to continue');
                 return false;
             }
         }
@@ -678,9 +648,23 @@
             if (isIOS) {
                 try {
                     const authSuccess = await handleIOSAuth();
-                    if (!authSuccess) return;
+                    if (!authSuccess) {
+                        console.log('Retrying Google Sign-In...');
+                        google.accounts.oauth2.initTokenClient({
+                            client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
+                            scope: 'https://www.googleapis.com/auth/drive.file',
+                            callback: (response) => {
+                                if (response.access_token) {
+                                    localStorage.setItem('googleToken', response.access_token);
+                                    // Retry capture after successful auth
+                                    setTimeout(() => document.getElementById('capture').click(), 500);
+                                }
+                            }
+                        }).requestAccessToken();
+                        return;
+                    }
                 } catch (error) {
-                    console.error('iOS auth failed:', error);
+                    console.error('Auth failed:', error);
                     return;
                 }
             }
@@ -688,29 +672,11 @@
             const video = document.getElementById('camera');
             
             try {
-                // Check if video is ready
-                if (video.readyState !== 4) {
-                    await new Promise((resolve, reject) => {
-                        const timeout = setTimeout(() => {
-                            reject(new Error('Video stream timeout'));
-                        }, 10000);
-
-                        video.onloadeddata = () => {
-                            clearTimeout(timeout);
-                            resolve();
-                        };
-                    });
-                }
-
                 const canvas = document.createElement('canvas');
                 
                 if (isIOS) {
-                    // Force canvas dimensions for iOS
                     canvas.width = video.videoWidth || 1280;
                     canvas.height = video.videoHeight || 720;
-                    
-                    // Add a slight delay for iOS
-                    await new Promise(resolve => setTimeout(resolve, 100));
                     
                     if (window.orientation === 90 || window.orientation === -90) {
                         const ctx = canvas.getContext('2d');
@@ -735,11 +701,7 @@
                     } catch (error) {
                         console.error('Upload failed:', error);
                         if (error.message.includes('Not authenticated')) {
-                            if (isIOS) {
-                                handleIOSAuth();
-                            } else if (window.createIOSLoginUI) {
-                                window.createIOSLoginUI();
-                            }
+                            handleIOSAuth();
                         } else {
                             showStatusMessage('Upload failed: ' + error.message);
                         }
@@ -747,9 +709,7 @@
                 }, 'image/jpeg', 0.95);
             } catch (error) {
                 console.error('Capture error:', error);
-                showStatusMessage(error.message === 'Video stream timeout' ? 
-                    'Camera timeout. Please refresh the page.' : 
-                    'Failed to capture photo');
+                showStatusMessage('Failed to capture photo');
             }
         });
 
@@ -883,8 +843,27 @@
                 camera.addEventListener('touchstart', (e) => e.preventDefault(), true);
             }
         });
+
+        // Add this to ensure Google Sign-In is initialized properly
+        document.addEventListener('DOMContentLoaded', () => {
+            const script = document.createElement('script');
+            script.src = 'https://accounts.google.com/gsi/client';
+            script.onload = () => {
+                google.accounts.oauth2.initTokenClient({
+                    client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
+                    scope: 'https://www.googleapis.com/auth/drive.file',
+                    callback: (response) => {
+                        if (response.access_token) {
+                            localStorage.setItem('googleToken', response.access_token);
+                        }
+                    }
+                });
+            };
+            document.body.appendChild(script);
+        });
+
         // Update version
-        console.log('Camera App v1.0.5-09');
+        console.log('Camera App v1.0.5-10');
     </script>
 </body>
 </html>

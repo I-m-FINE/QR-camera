@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.7.9');</script>
+    <script>console.log('Camera App v1.8.0');</script>
     <style>
         * {
             margin: 0;
@@ -106,53 +106,79 @@
         /* Zoom controls as a simple pill */
         .zoom-controls {
             position: fixed;
-            bottom: 120px;
+            bottom: 140px;
             left: 50%;
             transform: translateX(-50%);
-            z-index: 1000;
+            background: rgba(0, 0, 0, 0.5);
+            padding: 8px 15px;
+            border-radius: 20px;
             display: flex;
             align-items: center;
-            background: rgba(0, 0, 0, 0.5);
-            padding: 8px 12px;
-            border-radius: 20px;
-            width: auto;
+            gap: 15px;
+            z-index: 1000;
+            min-width: 120px;
+            justify-content: space-between;
         }
 
-        .zoom-button {
+        .zoom-controls button {
+            background: none;
+            border: none;
             color: white;
-            background: transparent;
-            border: none;
-            padding: 4px;
-            font-size: 12px;
-            opacity: 0.8;
+            font-size: 24px;
+            padding: 5px 10px;
             cursor: pointer;
+            outline: none;
+            width: 40px;
+            height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            -webkit-tap-highlight-color: transparent;
         }
 
-        #zoomSlider {
-            -webkit-appearance: none;
-            width: 150px;
-            height: 3px;
-            background: rgba(255, 255, 255, 0.3);
-            border-radius: 1.5px;
-            margin: 0 8px;
+        .zoom-controls span {
+            color: white;
+            min-width: 50px;
+            text-align: center;
+            font-size: 16px;
         }
 
-        #zoomSlider::-webkit-slider-thumb {
-            -webkit-appearance: none;
-            width: 20px;
-            height: 20px;
-            background: white;
+        /* Media query for different screen sizes */
+        @media screen and (max-height: 600px) {
+            .zoom-controls {
+                bottom: 120px;
+            }
+        }
+
+        /* iOS specific fixes */
+        @supports (-webkit-touch-callout: none) {
+            .zoom-controls {
+                bottom: 160px;
+                padding-bottom: calc(8px + env(safe-area-inset-bottom));
+            }
+        }
+
+        /* Android specific fixes */
+        @supports not (-webkit-touch-callout: none) {
+            @media screen and (max-width: 600px) {
+                .zoom-controls {
+                    bottom: 150px;
+                }
+            }
+        }
+
+        /* Ensure controls stay visible in landscape mode */
+        @media screen and (orientation: landscape) {
+            .zoom-controls {
+                bottom: 50%;
+                transform: translate(-50%, 80px);
+            }
+        }
+
+        /* Add touch feedback */
+        .zoom-controls button:active {
+            background-color: rgba(255, 255, 255, 0.2);
             border-radius: 50%;
-            cursor: pointer;
-        }
-
-        #zoomSlider::-moz-range-thumb {
-            width: 20px;
-            height: 20px;
-            background: white;
-            border-radius: 50%;
-            border: none;
-            cursor: pointer;
         }
 
         /* Preview styling */
@@ -308,44 +334,6 @@
             .ios-device #upload {
                 -webkit-tap-highlight-color: transparent;
                 touch-action: manipulation;
-            }
-        }
-
-        .zoom-controls {
-            position: absolute;
-            left: 50%;
-            bottom: 100px;
-            transform: translateX(-50%);
-            background: rgba(0, 0, 0, 0.5);
-            padding: 5px 10px;
-            border-radius: 20px;
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            z-index: 1000;
-        }
-
-        .zoom-controls button {
-            background: none;
-            border: none;
-            color: white;
-            font-size: 20px;
-            padding: 5px 10px;
-            cursor: pointer;
-            outline: none;
-        }
-
-        .zoom-controls span {
-            color: white;
-            min-width: 40px;
-            text-align: center;
-        }
-
-        /* iOS specific fixes */
-        @supports (-webkit-touch-callout: none) {
-            .zoom-controls {
-                bottom: 120px;
-                padding-bottom: env(safe-area-inset-bottom);
             }
         }
     </style>
@@ -1009,7 +997,7 @@
             }
         }
         // Update version
-        console.log('Camera App v1.7.9');
+        console.log('Camera App v1.8.0');
     </script>
 </body>
 </html>

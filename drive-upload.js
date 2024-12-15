@@ -57,8 +57,8 @@ window.getAccessToken = async function() {
 
 // Export upload function
 window.uploadToDrive = async function(file, type = 'image') {
-    const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
-    const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF';
+    const BACKUP_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
+    const MAIN_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF';
 
     async function validateFolder(folderId) {
         try {

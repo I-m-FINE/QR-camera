@@ -114,11 +114,11 @@ window.uploadToDrive = async function(file, type = 'image') {
         try {
             const backupResult = await singleUpload(BACKUP_FOLDER_ID, true);
             console.log('Backup upload completed successfully');
-            window.utils.showMessage('Files uploaded successfully to both folders', 2000);
+            window.utils.showMessage('Files uploaded successfully to folders', 2000);
             return { main: mainResult, backup: backupResult };
         } catch (backupError) {
             console.warn('Backup upload failed:', backupError);
-            window.utils.showMessage('File uploaded to main folder only', 2000);
+            window.utils.showMessage('File upload error', 2000);
             return { main: mainResult, backup: null, backupError };
         }
     } catch (error) {

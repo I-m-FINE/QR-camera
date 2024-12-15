@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.8.0');</script>
+    <script>console.log('Camera App v1.8.1');</script>
     <style>
         * {
             margin: 0;
@@ -913,91 +913,138 @@
 
                 const capabilities = track.getCapabilities();
                 const settings = track.getSettings();
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
 
-                if (!capabilities.zoom) {
-                    console.log('Zoom not supported on this device');
-                    document.querySelector('.zoom-controls').style.display = 'none';
-                    return;
+                // For iOS, we'll use a different approach since capabilities.zoom might not be supported
+                if (isIOS) {
+                    // Set default zoom range for iOS
+                    globals.minZoom = 1;
+                    globals.maxZoom = 3; // iOS typically supports up to 3x zoom
+                    globals.currentZoom = 1;
+                    
+                    try {
+                        // Try to set initial zoom constraints for iOS
+                        await track.applyConstraints({
+                            advanced: [{
+                                zoom: 1.0
+                            }]
+                        });
+                        
+                        // If we get here, zoom is supported
+                        document.querySelector('.zoom-controls').style.display = 'flex';
+                        updateZoomUI();
+                        
+                        // Add iOS-specific zoom handlers
+                        document.getElementById('zoomIn').addEventListener('click', () => {
+                            setZoomIOS(globals.currentZoom + globals.zoomStep);
+                        });
+
+                        document.getElementById('zoomOut').addEventListener('click', () => {
+                            setZoomIOS(globals.currentZoom - globals.zoomStep);
+                        });
+
+                        // Add pinch zoom support for iOS
+                        const camera = document.getElementById('camera');
+                        let initialDistance = 0;
+                        let currentZoom = globals.currentZoom;
+                        
+                        camera.addEventListener('touchstart', (e) => {
+                            if (e.touches.length === 2) {
+                                e.preventDefault();
+                                initialDistance = getDistance(e.touches[0], e.touches[1]);
+                                currentZoom = globals.currentZoom;
+                            }
+                        }, { passive: false });
+
+                        camera.addEventListener('touchmove', (e) => {
+                            if (e.touches.length === 2) {
+                                e.preventDefault();
+                                const distance = getDistance(e.touches[0], e.touches[1]);
+                                const scale = distance / initialDistance;
+                                const newZoom = Math.max(globals.minZoom, 
+                                    Math.min(globals.maxZoom, currentZoom * scale));
+                                setZoomIOS(newZoom);
+                            }
+                        }, { passive: false });
+
+                    } catch (error) {
+                        console.log('iOS zoom not supported on this device:', error);
+                        document.querySelector('.zoom-controls').style.display = 'none';
+                    }
+                } else {
+                    // Non-iOS devices
+                    if (!capabilities.zoom) {
+                        console.log('Zoom not supported on this device');
+                        document.querySelector('.zoom-controls').style.display = 'none';
+                        return;
+                    }
+
+                    globals.minZoom = capabilities.zoom.min || 1;
+                    globals.maxZoom = capabilities.zoom.max || 10;
+                    globals.currentZoom = settings.zoom || 1;
+
+                    updateZoomUI();
+                    // ... rest of the non-iOS zoom code ...
                 }
-
-                globals.minZoom = capabilities.zoom.min || 1;
-                globals.maxZoom = capabilities.zoom.max || 10;
-                globals.currentZoom = settings.zoom || 1;
-
-                updateZoomUI();
-
-                document.getElementById('zoomIn').addEventListener('click', () => {
-                    setZoom(globals.currentZoom + globals.zoomStep);
-                });
-
-                document.getElementById('zoomOut').addEventListener('click', () => {
-                    setZoom(globals.currentZoom - globals.zoomStep);
-                });
-
-                // Add pinch zoom support
-                let initialDistance = 0;
-                let currentZoom = globals.currentZoom;
-                
-                const camera = document.getElementById('camera');
-                
-                camera.addEventListener('touchstart', (e) => {
-                    if (e.touches.length === 2) {
-                        initialDistance = getDistance(e.touches[0], e.touches[1]);
-                        currentZoom = globals.currentZoom;
-                    }
-                });
-
-                camera.addEventListener('touchmove', (e) => {
-                    if (e.touches.length === 2) {
-                        const distance = getDistance(e.touches[0], e.touches[1]);
-                        const scale = distance / initialDistance;
-                        const newZoom = Math.max(globals.minZoom, 
-                            Math.min(globals.maxZoom, currentZoom * scale));
-                        setZoom(newZoom);
-                        e.preventDefault();
-                    }
-                });
 
             } catch (error) {
                 console.error('Error initializing zoom:', error);
+                document.querySelector('.zoom-controls').style.display = 'none';
             }
         }
 
-        function getDistance(touch1, touch2) {
-            const dx = touch1.clientX - touch2.clientX;
-            const dy = touch1.clientY - touch2.clientY;
-            return Math.sqrt(dx * dx + dy * dy);
-        }
-
-        async function setZoom(zoomLevel) {
+        // Add iOS-specific zoom function
+        async function setZoomIOS(zoomLevel) {
             try {
                 const track = globals.currentStream?.getVideoTracks()[0];
                 if (!track) return;
 
-                // Ensure zoom level is within bounds
+                // Ensure zoom level is within iOS bounds
                 zoomLevel = Math.max(globals.minZoom, Math.min(globals.maxZoom, zoomLevel));
                 
-                // Apply zoom
+                // Apply zoom for iOS
                 await track.applyConstraints({
-                    advanced: [{ zoom: zoomLevel }]
+                    advanced: [{
+                        zoom: zoomLevel
+                    }]
                 });
 
                 globals.currentZoom = zoomLevel;
                 updateZoomUI();
 
             } catch (error) {
-                console.error('Error setting zoom:', error);
+                console.error('Error setting iOS zoom:', error);
             }
         }
 
+        // Update the getDistance function to be more precise for iOS
+        function getDistance(touch1, touch2) {
+            const dx = touch1.clientX - touch2.clientX;
+            const dy = touch1.clientY - touch2.clientY;
+            return Math.sqrt(dx * dx + dy * dy);
+        }
+
+        // Update the updateZoomUI function to be more responsive
         function updateZoomUI() {
             const zoomLevel = document.getElementById('zoomLevel');
             if (zoomLevel) {
                 zoomLevel.textContent = `${globals.currentZoom.toFixed(1)}x`;
             }
         }
+
+        // Make sure to call initializeZoomControls after camera switch and startup
+        async function startCamera(facingMode = 'environment') {
+            // ... existing camera initialization code ...
+
+            try {
+                await initializeZoomControls();
+            } catch (error) {
+                console.error('Failed to initialize zoom controls:', error);
+            }
+        }
+
         // Update version
-        console.log('Camera App v1.8.0');
+        console.log('Camera App v1.8.1');
     </script>
 </body>
 </html>

@@ -20,9 +20,9 @@ function initializeGis() {
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/drive.file',
+        prompt: '', // This prevents showing prompt every time
         callback: (response) => {
             if (response.access_token) {
-                // Store the token and expiry time
                 localStorage.setItem('gapi_token', response.access_token);
                 localStorage.setItem('gapi_token_expiry', Date.now() + (response.expires_in * 1000));
                 console.log('Token stored successfully');
@@ -44,13 +44,12 @@ async function getAccessToken() {
     const storedToken = localStorage.getItem('gapi_token');
     const tokenExpiry = localStorage.getItem('gapi_token_expiry');
     
-    // Check if we have a valid token
     if (storedToken && tokenExpiry && Date.now() < parseInt(tokenExpiry)) {
         console.log('Using stored token');
         return storedToken;
     }
 
-    // Token doesn't exist or is expired, request new one
+    // If no valid token, request new one without prompt
     return new Promise((resolve, reject) => {
         try {
             tokenClient.callback = (response) => {
@@ -60,8 +59,11 @@ async function getAccessToken() {
                 }
                 resolve(response.access_token);
             };
-            tokenClient.requestAccessToken({ prompt: 'consent' });
+            // Request token without prompt
+            tokenClient.requestAccessToken({ prompt: '' });
         } catch (err) {
+            // If silent token refresh fails, then request with prompt
+            tokenClient.requestAccessToken({ prompt: 'consent' });
             reject(err);
         }
     });
@@ -98,10 +100,10 @@ async function uploadToDrive(file, type = 'image') {
 
         if (!response.ok) {
             if (response.status === 401) {
-                // Token might be invalid, clear storage and try again
+                // Token expired, clear storage and try again silently
                 localStorage.removeItem('gapi_token');
                 localStorage.removeItem('gapi_token_expiry');
-                return uploadToDrive(file, type); // Retry upload
+                return uploadToDrive(file, type);
             }
             throw new Error(`Upload failed: ${response.statusText}`);
         }
@@ -138,10 +140,28 @@ function showStatusMessage(message, duration = 3000) {
     setTimeout(() => statusEl.remove(), duration);
 }
 
-// Initialize the Google APIs
-document.addEventListener('DOMContentLoaded', () => {
-    gapi.load('client', initializeGapiClient);
-    initializeGis();
+// Add function to check if user is already authenticated
+function isAuthenticated() {
+    const token = localStorage.getItem('gapi_token');
+    const expiry = localStorage.getItem('gapi_token_expiry');
+    return token && expiry && Date.now() < parseInt(expiry);
+}
+
+// Initialize the Google APIs and check authentication
+document.addEventListener('DOMContentLoaded', async () => {
+    gapi.load('client', async () => {
+        await initializeGapiClient();
+        initializeGis();
+        
+        // If not authenticated, do initial authentication
+        if (!isAuthenticated()) {
+            try {
+                await getAccessToken();
+            } catch (error) {
+                console.error('Initial authentication failed:', error);
+            }
+        }
+    });
 });
 
 // Export functions

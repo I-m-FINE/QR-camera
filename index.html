@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.8.8');</script>
+    <script>console.log('Camera App v1.8.9');</script>
     <style>
         * {
             margin: 0;
@@ -586,60 +586,7 @@
             return Math.sqrt(dx * dx + dy * dy);
         }
 
-        // Switch camera function
-        document.getElementById('switchCamera').addEventListener('click', async () => {
-            if (globals.mediaRecorder?.state === 'recording') {
-                globals.mediaRecorder.stop();
-            }
-
-            globals.currentFacingMode = globals.currentFacingMode === 'environment' ? 'user' : 'environment';
-            await startCamera(globals.currentFacingMode);
-        });
-
-        // Start camera when page loads
-        document.addEventListener('DOMContentLoaded', () => {
-            startCamera();
-        });
-
-        // Event Listeners
-        document.addEventListener('DOMContentLoaded', async () => {
-            try {
-                await startCamera();
-                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                    document.body.classList.add('ios-device');
-                    // Add iOS-specific meta tags dynamically
-                    const metaTags = [
-                        { name: 'apple-mobile-web-app-capable', content: 'yes' },
-                        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }
-                    ];
-                    metaTags.forEach(tag => {
-                        if (!document.querySelector(`meta[name="${tag.name}"]`)) {
-                            const meta = document.createElement('meta');
-                            meta.name = tag.name;
-                            meta.content = tag.content;
-                            document.head.appendChild(meta);
-                        }
-                    });
-                }
-            } catch (error) {
-                console.error('Initial camera setup failed:', error);
-            }
-        });
-
-        document.addEventListener('visibilitychange', () => {
-            if (document.visibilityState === 'visible') {
-                if (!globals.isCameraRunning) {
-                    startCamera(globals.currentFacingMode);
-                }
-            } else {
-                if (globals.currentStream) {
-                    utils.cleanupMediaStream(globals.currentStream);
-                    globals.isCameraRunning = false;
-                }
-            }
-        });
-
-        // Camera Controls
+        // Update the switch camera function
         document.getElementById('switchCamera').addEventListener('click', async () => {
             console.log('Attempting to switch camera...');
             
@@ -725,11 +672,14 @@
                     setTimeout(() => reject(new Error('Video loading timeout')), 10000);
                 });
 
+                // Reinitialize zoom controls after switching camera
+                await initializeZoomControls();
+
                 showStatusMessage('Camera switched', 1000);
 
             } catch (error) {
                 console.error('Failed to switch camera:', error);
-                showStatusMessage('Failed to switch camera. Please try again.');
+                showStatusMessage('Failed to switch camera: ' + error.message);
                 
                 // Try to restore previous camera
                 try {
@@ -740,40 +690,71 @@
                     showStatusMessage('Camera error. Please refresh the page.');
                 }
             }
+        });
 
+        // Helper function to show status messages
+        function showStatusMessage(message, duration = 3000) {
+            const statusEl = document.getElementById('statusMessage') || document.createElement('div');
+            statusEl.id = 'statusMessage';
+            statusEl.style.cssText = `
+                position: fixed;
+                top: 50%;
+                left: 50%;
+                transform: translate(-50%, -50%);
+                background: rgba(0, 0, 0, 0.8);
+                color: white;
+                padding: 15px 20px;
+                border-radius: 8px;
+                z-index: 9999;
+                text-align: center;
+            `;
+            statusEl.textContent = message;
+            document.body.appendChild(statusEl);
+            setTimeout(() => statusEl.remove(), duration);
+        }
+
+        // Start camera when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            startCamera();
+        });
+
+        // Event Listeners
+        document.addEventListener('DOMContentLoaded', async () => {
             try {
-                // After successfully switching camera
-                await initializeZoomControls();
+                await startCamera();
+                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                    document.body.classList.add('ios-device');
+                    // Add iOS-specific meta tags dynamically
+                    const metaTags = [
+                        { name: 'apple-mobile-web-app-capable', content: 'yes' },
+                        { name: 'apple-mobile-web-app-status-bar-style', content: 'black-translucent' }
+                    ];
+                    metaTags.forEach(tag => {
+                        if (!document.querySelector(`meta[name="${tag.name}"]`)) {
+                            const meta = document.createElement('meta');
+                            meta.name = tag.name;
+                            meta.content = tag.content;
+                            document.head.appendChild(meta);
+                        }
+                    });
+                }
             } catch (error) {
-                console.error('Failed to initialize zoom controls:', error);
+                console.error('Initial camera setup failed:', error);
             }
         });
 
-        function showStatusMessage(message, duration = 3000) {
-            if (window.showStatus) {
-                window.showStatus(message, duration);
+        document.addEventListener('visibilitychange', () => {
+            if (document.visibilityState === 'visible') {
+                if (!globals.isCameraRunning) {
+                    startCamera(globals.currentFacingMode);
+                }
             } else {
-                console.error('showStatus function not available');
-                // Fallback status display
-                const statusEl = document.getElementById('statusMessage') || document.createElement('div');
-                statusEl.id = 'statusMessage';
-                statusEl.style.cssText = `
-                    position: fixed;
-                    top: 50%;
-                    left: 50%;
-                    transform: translate(-50%, -50%);
-                    background: rgba(0, 0, 0, 0.8);
-                    color: white;
-                    padding: 15px 20px;
-                    border-radius: 8px;
-                    z-index: 9999;
-                    text-align: center;
-                `;
-                statusEl.textContent = message;
-                document.body.appendChild(statusEl);
-                setTimeout(() => statusEl.remove(), duration);
+                if (globals.currentStream) {
+                    utils.cleanupMediaStream(globals.currentStream);
+                    globals.isCameraRunning = false;
+                }
             }
-        }
+        });
 
         document.getElementById('capture').addEventListener('click', async () => {
             if (!localStorage.getItem('googleToken')) {
@@ -903,7 +884,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.8.8');
+        console.log('Camera App v1.8.9');
     </script>
 </body>
 </html>

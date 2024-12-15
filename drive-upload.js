@@ -1,5 +1,5 @@
-// Define utils first
-const utils = {
+// First, create and export utils
+window.utils = {
     showMessage: function(message, duration = 3000) {
         const statusEl = document.getElementById('statusMessage') || document.createElement('div');
         statusEl.id = 'statusMessage';
@@ -18,27 +18,19 @@ const utils = {
         statusEl.textContent = message;
         document.body.appendChild(statusEl);
         setTimeout(() => statusEl.remove(), duration);
+    },
+    cleanupMediaStream: function(stream) {
+        if (stream) {
+            stream.getTracks().forEach(track => track.stop());
+        }
     }
 };
 
-// OAuth and token handling
+// Token handling
 let accessToken = null;
-let tokenClient = null;
 
-function initializeGoogleAuth() {
-    google.accounts.oauth2.initTokenClient({
-        client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
-        scope: 'https://www.googleapis.com/auth/drive.file',
-        callback: (response) => {
-            if (response.access_token) {
-                accessToken = response.access_token;
-                console.log('Token obtained successfully');
-            }
-        }
-    });
-}
-
-async function getAccessToken() {
+// Export getAccessToken function
+window.getAccessToken = async function() {
     if (accessToken) {
         return accessToken;
     }
@@ -61,14 +53,15 @@ async function getAccessToken() {
             reject(error);
         }
     });
-}
+};
 
-async function uploadToDrive(file, type = 'image') {
+// Export upload function
+window.uploadToDrive = async function(file, type = 'image') {
     const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
     const BACKUP_FOLDER_ID = '1Hs_YPCwGq_YZPgxhR_Wd5YlGcBxXYZ12'; // Your backup folder ID
 
     try {
-        const token = await getAccessToken();
+        const token = await window.getAccessToken();
         if (!token) {
             throw new Error('No access token available');
         }
@@ -124,26 +117,31 @@ async function uploadToDrive(file, type = 'image') {
         console.log('Main upload result:', mainResult);
         console.log('Backup upload result:', backupResult);
 
-        utils.showMessage('Files uploaded successfully', 2000);
+        window.utils.showMessage('Files uploaded successfully', 2000);
         return { main: mainResult, backup: backupResult };
 
     } catch (error) {
         console.error('Upload error:', error);
-        utils.showMessage('Upload failed: ' + error.message);
+        window.utils.showMessage('Upload failed: ' + error.message);
         throw error;
     }
-}
+};
 
-// Initialize when the page loads
+// Initialize Google Auth when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    // Load Google Identity Services
     const script = document.createElement('script');
     script.src = 'https://accounts.google.com/gsi/client';
-    script.onload = initializeGoogleAuth;
+    script.onload = () => {
+        google.accounts.oauth2.initTokenClient({
+            client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
+            scope: 'https://www.googleapis.com/auth/drive.file',
+            callback: (response) => {
+                if (response.access_token) {
+                    accessToken = response.access_token;
+                    console.log('Initial token obtained successfully');
+                }
+            }
+        });
+    };
     document.body.appendChild(script);
 });
-
-// Export to window
-window.uploadToDrive = uploadToDrive;
-window.utils = utils;
-window.getAccessToken = getAccessToken;

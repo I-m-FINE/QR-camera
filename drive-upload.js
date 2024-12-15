@@ -128,58 +128,43 @@ window.addEventListener('load', function() {
 });
 
 // Upload function
-async function uploadToDrive(blob, type = 'image') {
-    const token = localStorage.getItem('googleToken');
-    
-    if (!token) {
-        console.log('No authentication token found, showing login UI');
-        createIOSLoginUI();
-        throw new Error('Not authenticated with Google Drive');
-    }
-
+async function uploadToDrive(file, type = 'image') {
     try {
-        showStatus('Uploading ' + type + '...');
-        
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const fileExtension = type === 'video' ? '.webm' : '.jpg';
-        const fileName = `${type}_${timestamp}${fileExtension}`;
+        // Get the specific folder ID
+        const folderId = '1YourSpecificFolderID'; // Replace with your actual folder ID
         
         const metadata = {
-            name: fileName,
-            mimeType: type === 'video' ? 'video/webm' : 'image/jpeg',
-            parents: [FOLDER_ID]
+            name: `${type}_${new Date().toISOString()}.${type === 'image' ? 'jpg' : 'mp4'}`,
+            mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
+            parents: [folderId] // This ensures the file is only stored in the specific folder
         };
 
         const form = new FormData();
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-        form.append('file', blob);
+        form.append('file', file);
 
+        const accessToken = await getAccessToken();
+        
         const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
             method: 'POST',
             headers: {
-                'Authorization': `Bearer ${token}`
+                'Authorization': 'Bearer ' + accessToken,
             },
             body: form
         });
 
         if (!response.ok) {
-            const errorData = await response.json();
-            if (response.status === 401) {
-                localStorage.removeItem('googleToken');
-                createIOSLoginUI();
-                throw new Error('Authentication expired. Please sign in again.');
-            }
-            throw new Error(errorData.error.message || 'Upload failed');
+            throw new Error(`Upload failed: ${response.statusText}`);
         }
 
         const result = await response.json();
-        console.log('Upload successful:', result);
-        showStatus('Upload complete!', 2000);
+        console.log('File uploaded successfully:', result);
+        showStatusMessage('Upload complete', 2000);
         return result;
 
     } catch (error) {
         console.error('Upload error:', error);
-        showStatus('Upload failed: ' + error.message, 3000);
+        showStatusMessage('Upload failed: ' + error.message);
         throw error;
     }
 }

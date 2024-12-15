@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-06');</script>
+    <script>console.log('Camera App v1.0.5-02');</script>
     <style>
         /* Reset default styles */
         * {
@@ -871,7 +871,7 @@
             }
         });
 
-        // Update the record button handler
+        // Update the record button handler for iOS
         document.getElementById('recordButton').addEventListener('click', async function() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             
@@ -896,19 +896,26 @@
                 try {
                     let options;
                     if (isIOS) {
-                        // iOS specific recording options
-                        options = {
-                            mimeType: 'video/mp4;codecs=h264',
-                            videoBitsPerSecond: 2000000,
-                            audioBitsPerSecond: 128000
-                        };
-                        
-                        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
-                            options = {
-                                mimeType: 'video/webm;codecs=h264',
-                                videoBitsPerSecond: 2000000,
-                                audioBitsPerSecond: 128000
-                            };
+                        // Try different MIME types for iOS
+                        const mimeTypes = [
+                            'video/mp4',
+                            'video/webm',
+                            'video/webm;codecs=h264',
+                            'video/webm;codecs=vp8',
+                            ''  // Empty string lets browser choose
+                        ];
+
+                        // Find first supported MIME type
+                        for (let type of mimeTypes) {
+                            if (!type || MediaRecorder.isTypeSupported(type)) {
+                                options = {
+                                    mimeType: type,
+                                    videoBitsPerSecond: 2000000,
+                                    audioBitsPerSecond: 128000
+                                };
+                                console.log('Using MIME type:', type || 'browser default');
+                                break;
+                            }
                         }
                     } else {
                         options = {
@@ -941,7 +948,7 @@
                             const mainMetadata = {
                                 name: `video_${new Date().toISOString()}.${isIOS ? 'mp4' : 'webm'}`,
                                 mimeType: mimeType,
-                                parents: ['1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'] // Main folder ID
+                                parents: ['1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB']
                             };
                             
                             mainForm.append('metadata', new Blob([JSON.stringify(mainMetadata)], { type: 'application/json' }));
@@ -964,7 +971,7 @@
                             const backupMetadata = {
                                 name: `video_${new Date().toISOString()}_backup.${isIOS ? 'mp4' : 'webm'}`,
                                 mimeType: mimeType,
-                                parents: ['1vsvYXG3w_nnJOp845et41CJWrRP4iFHF'] // Backup folder ID
+                                parents: ['1vsvYXG3w_nnJOp845et41CJWrRP4iFHF']
                             };
                             
                             backupForm.append('metadata', new Blob([JSON.stringify(backupMetadata)], { type: 'application/json' }));
@@ -1007,7 +1014,7 @@
                     
                 } catch (error) {
                     console.error('Failed to start recording:', error);
-                    showStatusMessage(isIOS ? 'Recording not supported on this iOS device' : 'Recording not supported on this device');
+                    showStatusMessage('Recording error: ' + error.message);
                     this.classList.remove('recording');
                 }
             } else {
@@ -1092,7 +1099,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5-06');
+        console.log('Camera App v1.0.5-02');
     </script>
 </body>
 </html>

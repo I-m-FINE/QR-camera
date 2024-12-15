@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5');</script>
+    <script>console.log('Camera App v1.0.5-1');</script>
     <style>
         /* Reset default styles */
         * {
@@ -37,7 +37,7 @@
             background: transparent;
         }
 
-        /* Zoom controls positioning - consistently to the left */
+        /* Zoom controls base styling */
         .zoom-controls {
             position: fixed;
             display: flex;
@@ -49,24 +49,24 @@
             backdrop-filter: blur(5px);
         }
 
-        /* Portrait mode - horizontal layout */
+        /* Portrait mode - horizontal layout above camera button */
         @media screen and (orientation: portrait) {
             .zoom-controls {
-                flex-direction: row; /* Make controls horizontal */
+                flex-direction: row;
                 right: auto;
-                left: calc(50% - 120px);
-                bottom: 45px;
-                transform: translateY(0);
-                padding: 5px 15px; /* Adjust padding for horizontal layout */
+                left: 50%;
+                bottom: 120px;
+                transform: translateX(-50%);
+                padding: 5px 15px;
+                width: fit-content;
             }
 
-            /* Adjust zoom text position for horizontal layout */
             #zoomLevel {
-                margin: 0 10px; /* Add horizontal margins */
+                margin: 0 10px;
             }
         }
 
-        /* Landscape mode - keep vertical layout */
+        /* Landscape mode - unchanged */
         @media screen and (orientation: landscape) {
             .button-container {
                 bottom: 50%;
@@ -81,7 +81,7 @@
                 bottom: 50%;
                 right: 120px;
                 transform: translateY(50%);
-                flex-direction: column; /* Keep vertical layout */
+                flex-direction: column;
                 padding: 10px;
             }
         }
@@ -740,7 +740,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5');
+        console.log('Camera App v1.0.5-1');
     </script>
 </body>
 </html>

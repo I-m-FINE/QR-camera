@@ -57,8 +57,13 @@ window.getAccessToken = async function() {
 
 // Export upload function
 window.uploadToDrive = async function(file, type = 'image') {
+    console.log('Starting upload process...');
+    
     const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
     const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF';
+    
+    console.log('Main folder ID:', MAIN_FOLDER_ID);
+    console.log('Backup folder ID:', BACKUP_FOLDER_ID);
 
     async function singleUpload(folderId, isBackup) {
         console.log(`Starting upload to ${isBackup ? 'backup' : 'main'} folder: ${folderId}`);
@@ -75,27 +80,34 @@ window.uploadToDrive = async function(file, type = 'image') {
         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
         form.append('file', file);
 
-        const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${await window.getAccessToken()}` },
-            body: form
-        });
+        try {
+            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${await window.getAccessToken()}` },
+                body: form
+            });
 
-        if (!response.ok) {
-            const errorText = await response.text();
-            console.error(`Upload failed for ${isBackup ? 'backup' : 'main'} folder:`, errorText);
-            throw new Error(`Upload failed for ${isBackup ? 'backup' : 'main'} folder: ${response.statusText}`);
+            if (!response.ok) {
+                const errorText = await response.text();
+                console.error(`Upload failed for ${isBackup ? 'backup' : 'main'} folder:`, errorText);
+                throw new Error(`Upload failed for ${isBackup ? 'backup' : 'main'} folder: ${response.statusText}`);
+            }
+
+            const result = await response.json();
+            console.log(`Upload successful to ${isBackup ? 'backup' : 'main'} folder:`, result);
+            return result;
+        } catch (error) {
+            console.error(`Error in ${isBackup ? 'backup' : 'main'} upload:`, error);
+            throw error;
         }
-
-        const result = await response.json();
-        console.log(`Upload successful to ${isBackup ? 'backup' : 'main'} folder:`, result);
-        return result;
     }
 
     try {
+        // Try main upload first
         const mainResult = await singleUpload(MAIN_FOLDER_ID, false);
         console.log('Main upload completed');
 
+        // Then try backup upload
         try {
             const backupResult = await singleUpload(BACKUP_FOLDER_ID, true);
             console.log('Backup upload completed successfully');

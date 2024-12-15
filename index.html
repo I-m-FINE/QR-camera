@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-04');</script>
+    <script>console.log('Camera App v1.0.5-05');</script>
     <style>
         /* Reset default styles */
         * {
@@ -708,11 +708,22 @@
             }
         }
 
-        // Update handleIOSAuth to always show sign-in UI
+        // Update handleIOSAuth to prevent repeated prompts
         async function handleIOSAuth() {
-            console.log('Starting iOS authentication...');
+            console.log('Checking iOS authentication...');
             try {
-                // Always show sign-in UI for iOS
+                const token = localStorage.getItem('googleToken');
+                if (token) {
+                    // Validate existing token
+                    const response = await fetch('https://www.googleapis.com/oauth2/v3/tokeninfo?access_token=' + token);
+                    if (response.ok) {
+                        console.log('Existing token is valid');
+                        return true;
+                    }
+                }
+                
+                // Only show sign-in if no valid token exists
+                console.log('No valid token, showing sign-in...');
                 showStatusMessage('Please sign in to Google...', 2000);
                 await forceIOSGoogleSignIn();
                 return true;
@@ -729,7 +740,6 @@
             
             if (isIOS) {
                 try {
-                    showStatusMessage('Checking authentication...');
                     const authSuccess = await handleIOSAuth();
                     if (!authSuccess) {
                         return;
@@ -745,22 +755,47 @@
             try {
                 showStatusMessage('Capturing photo...');
                 
+                // Wait for video to be ready
+                if (video.readyState !== video.HAVE_ENOUGH_DATA) {
+                    await new Promise((resolve) => {
+                        video.addEventListener('loadeddata', resolve, { once: true });
+                        setTimeout(resolve, 1000); // Timeout after 1 second
+                    });
+                }
+                
                 const canvas = document.createElement('canvas');
                 
                 if (isIOS) {
-                    canvas.width = video.videoWidth || 1280;
-                    canvas.height = video.videoHeight || 720;
+                    // Ensure we get the actual video dimensions
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
                     
+                    console.log('Video dimensions:', canvas.width, 'x', canvas.height);
+                    
+                    // Ensure video is playing and has data
+                    if (!video.videoWidth || !video.videoHeight) {
+                        throw new Error('Video stream not ready');
+                    }
+                    
+                    const ctx = canvas.getContext('2d');
+                    
+                    // Clear the canvas first
+                    ctx.fillStyle = '#000';
+                    ctx.fillRect(0, 0, canvas.width, canvas.height);
+                    
+                    // Handle orientation
                     if (window.orientation === 90 || window.orientation === -90) {
-                        const ctx = canvas.getContext('2d');
                         ctx.save();
                         ctx.translate(canvas.width, 0);
                         ctx.rotate(Math.PI / 2);
                         ctx.drawImage(video, 0, 0, canvas.height, canvas.width);
                         ctx.restore();
                     } else {
-                        canvas.getContext('2d').drawImage(video, 0, 0, canvas.width, canvas.height);
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
                     }
+                    
+                    // Debug: log canvas data
+                    console.log('Canvas dimensions after capture:', canvas.width, 'x', canvas.height);
                 } else {
                     canvas.width = video.videoWidth;
                     canvas.height = video.videoHeight;
@@ -770,19 +805,15 @@
                 canvas.toBlob(async (blob) => {
                     if (isIOS) {
                         showStatusMessage('Preparing upload...');
-                        
-                        // Log blob details
                         console.log('Blob size:', blob.size);
-                        console.log('Blob type:', blob.type);
                     }
                     
                     try {
-                        // Direct upload attempt
                         const form = new FormData();
                         const metadata = {
                             name: `photo_${new Date().toISOString()}.jpg`,
                             mimeType: 'image/jpeg',
-                            parents: ['1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB'] // Main folder ID
+                            parents: ['1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB']
                         };
                         
                         form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
@@ -809,19 +840,19 @@
                         console.log('Upload successful:', result);
                         showStatusMessage('✓ Photo uploaded successfully', 2000);
 
-                        // Vibrate for success feedback
                         if (isIOS && navigator.vibrate) {
                             navigator.vibrate(200);
                         }
                     } catch (error) {
                         console.error('Upload error:', error);
-                        showStatusMessage('Upload failed - Retrying authentication...');
-                        
-                        // Clear token and retry authentication
-                        localStorage.removeItem('googleToken');
-                        await handleIOSAuth();
-                        
-                        showStatusMessage('Please try capturing again', 2000);
+                        if (error.message.includes('401') || error.message.includes('403')) {
+                            // Only clear token if it's an authentication error
+                            localStorage.removeItem('googleToken');
+                            await handleIOSAuth();
+                            showStatusMessage('Please try capturing again', 2000);
+                        } else {
+                            showStatusMessage('Upload failed: ' + error.message, 3000);
+                        }
                     }
                 }, 'image/jpeg', 0.95);
             } catch (error) {
@@ -999,7 +1030,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5-04');
+        console.log('Camera App v1.0.5-05');
     </script>
 </body>
 </html>

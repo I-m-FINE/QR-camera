@@ -341,15 +341,14 @@
 
     <script src="drive-upload.js"></script>
     <script>
+        // Global variables - consolidate all declarations
         let imageBlob = null;
         let videoBlob = null;
         let mediaRecorder = null;
         let recordedChunks = [];
-        let currentFacingMode = 'environment'; // Track current camera
-        let currentZoom = 1;
+        let currentFacingMode = 'environment';
         let currentStream = null;
-
-        // Global variables
+        let currentZoom = 1;
         let isCameraRunning = false;
         let isInitializing = false;
 
@@ -519,15 +518,13 @@
 
         // Initialize
         document.addEventListener('DOMContentLoaded', async () => {
-            if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                document.body.classList.add('ios-device');
-            }
-            
             try {
                 await startCamera();
-                await fullscreenUtils.enterFullscreen();
+                if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
+                    document.body.classList.add('ios-device');
+                }
             } catch (error) {
-                console.error('Initialization failed:', error);
+                console.error('Initial camera setup failed:', error);
             }
         });
 
@@ -626,7 +623,6 @@
 
         // Simplified camera initialization
         async function startCamera(facingMode = 'environment') {
-            // Prevent multiple simultaneous initializations
             if (isInitializing || isCameraRunning) {
                 console.log('Camera already running or initializing, skipping');
                 return;
@@ -634,7 +630,6 @@
 
             try {
                 isInitializing = true;
-                console.log('Starting camera initialization...');
                 const video = document.getElementById('camera');
                 
                 // Stop any existing streams
@@ -643,33 +638,43 @@
                     currentStream = null;
                 }
 
-                // Get camera stream
-                const stream = await navigator.mediaDevices.getUserMedia({
+                // Request camera access with constraints
+                const constraints = {
                     video: {
                         facingMode: facingMode,
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 }
                     },
                     audio: false
-                });
+                };
 
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
                 // Set up video element
                 video.srcObject = stream;
                 currentStream = stream;
                 currentFacingMode = facingMode;
 
                 // Wait for video to be ready
-                video.onloadedmetadata = () => {
-                    video.play()
-                        .then(() => {
-                            console.log('Camera started successfully');
-                            isCameraRunning = true;
-                        })
-                        .catch(console.error);
-                };
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        video.play()
+                            .then(() => {
+                                console.log('Camera started successfully');
+                                isCameraRunning = true;
+                                resolve();
+                            })
+                            .catch(reject);
+                    };
+                    video.onerror = reject;
+                });
+
+                // Initialize zoom controls after camera is ready
+                initializeZoomControls();
 
             } catch (error) {
-                console.error('Camera error:', error);
+                console.error('Camera initialization error:', error);
+                showStatus('Camera access failed. Please check permissions.');
             } finally {
                 isInitializing = false;
             }
@@ -735,31 +740,37 @@
                 // Start recording
                 recordedChunks = [];
                 const stream = video.srcObject;
-                mediaRecorder = new MediaRecorder(stream, {
-                    mimeType: 'video/webm;codecs=h264',
-                    videoBitsPerSecond: 2500000 // 2.5 Mbps
-                });
+                
+                try {
+                    mediaRecorder = new MediaRecorder(stream, {
+                        mimeType: 'video/webm;codecs=h264',
+                        videoBitsPerSecond: 2500000
+                    });
 
-                mediaRecorder.ondataavailable = (event) => {
-                    if (event.data.size > 0) {
-                        recordedChunks.push(event.data);
-                    }
-                };
+                    mediaRecorder.ondataavailable = (event) => {
+                        if (event.data.size > 0) {
+                            recordedChunks.push(event.data);
+                        }
+                    };
 
-                mediaRecorder.onstop = async () => {
-                    showStatus('Processing video...');
-                    const blob = new Blob(recordedChunks, { type: 'video/webm' });
-                    await uploadToDrive(blob, 'video');
-                    recordedChunks = [];
-                };
+                    mediaRecorder.onstop = async () => {
+                        showStatus('Processing video...');
+                        const blob = new Blob(recordedChunks, { type: 'video/webm' });
+                        await uploadToDrive(blob, 'video');
+                        recordedChunks = [];
+                    };
 
-                mediaRecorder.start(1000); // Collect data every second
-                this.classList.add('recording');
-                this.innerHTML = `
-                    <svg class="recording-icon" width="24" height="24" viewBox="0 0 24 24">
-                        <circle cx="12" cy="12" r="8" fill="red"/>
-                    </svg>
-                `;
+                    mediaRecorder.start(1000);
+                    this.classList.add('recording');
+                    this.innerHTML = `
+                        <svg class="recording-icon" width="24" height="24" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="8" fill="red"/>
+                        </svg>
+                    `;
+                } catch (error) {
+                    console.error('Failed to start recording:', error);
+                    showStatus('Failed to start recording');
+                }
             } else {
                 // Stop recording
                 mediaRecorder.stop();

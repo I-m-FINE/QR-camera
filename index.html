@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.7.7');</script>
+    <script>console.log('Camera App v1.7.8');</script>
     <style>
         * {
             margin: 0;
@@ -397,42 +397,68 @@
             }
         };
 
-        // Add this helper function for iOS permission handling
+        // Update the iOS permission handling function
         async function requestIOSPermissions() {
+            console.log('Requesting iOS permissions...');
+            
             try {
-                // First request camera
-                const videoStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: true,
-                    audio: false 
-                });
+                // First, request both permissions simultaneously
+                const constraints = {
+                    video: {
+                        facingMode: 'environment',
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: true
+                };
+
+                // Show explicit message for iOS users
+                showStatusMessage('Please allow camera AND microphone access when prompted', 5000);
+
+                // Request both permissions
+                const combinedStream = await navigator.mediaDevices.getUserMedia(constraints);
                 
-                // Then request audio separately
-                const audioStream = await navigator.mediaDevices.getUserMedia({ 
-                    video: false,
-                    audio: true 
-                });
+                // Verify if we got both audio and video tracks
+                const hasVideo = combinedStream.getVideoTracks().length > 0;
+                const hasAudio = combinedStream.getAudioTracks().length > 0;
 
-                // Combine the tracks from both streams
-                const combinedTracks = [
-                    ...videoStream.getVideoTracks(),
-                    ...audioStream.getAudioTracks()
-                ];
+                console.log('Permissions granted - Video:', hasVideo, 'Audio:', hasAudio);
 
-                // Create a new stream with both tracks
-                const combinedStream = new MediaStream(combinedTracks);
-
-                // Clean up individual streams
-                videoStream.getTracks().forEach(track => track.stop());
-                audioStream.getTracks().forEach(track => track.stop());
+                if (!hasAudio) {
+                    // If audio track is missing, try to request it separately
+                    showStatusMessage('Please allow microphone access when prompted', 3000);
+                    try {
+                        const audioStream = await navigator.mediaDevices.getUserMedia({ 
+                            audio: true,
+                            video: false 
+                        });
+                        
+                        // Add audio tracks to the combined stream
+                        audioStream.getAudioTracks().forEach(track => {
+                            combinedStream.addTrack(track);
+                        });
+                    } catch (audioError) {
+                        console.error('Failed to get audio permission:', audioError);
+                        showStatusMessage('Microphone access denied. Video will be recorded without sound.', 3000);
+                    }
+                }
 
                 return combinedStream;
+
             } catch (error) {
                 console.error('iOS Permission Error:', error);
+                
+                if (error.name === 'NotAllowedError') {
+                    showStatusMessage('Please enable camera and microphone access in iOS Settings > Safari > ' + window.location.hostname, 5000);
+                } else {
+                    showStatusMessage('Permission error: ' + error.message);
+                }
+                
                 throw error;
             }
         }
 
-        // Update startCamera function with iOS-specific handling
+        // Update startCamera function to handle iOS permissions better
         async function startCamera(facingMode = 'environment') {
             console.log('Starting camera initialization...');
             
@@ -455,29 +481,27 @@
                 }
 
                 const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
                 
                 let stream;
-                
                 if (isIOS) {
-                    // iOS-specific permission handling
-                    try {
-                        stream = await requestIOSPermissions();
-                    } catch (error) {
-                        if (error.name === 'NotAllowedError') {
-                            showStatusMessage('Please allow camera and microphone access in Settings');
-                            throw error;
-                        }
-                        throw error;
+                    stream = await requestIOSPermissions();
+                    
+                    // Check permissions after stream is obtained
+                    const hasVideo = stream.getVideoTracks().length > 0;
+                    const hasAudio = stream.getAudioTracks().length > 0;
+                    
+                    if (!hasVideo || !hasAudio) {
+                        const missing = [];
+                        if (!hasVideo) missing.push('camera');
+                        if (!hasAudio) missing.push('microphone');
+                        
+                        showStatusMessage(`Missing ${missing.join(' and ')} permissions. Please check iOS Settings.`, 4000);
                     }
                 } else {
                     // Normal permission handling for other devices
                     const constraints = {
-                        video: isMobile ? {
+                        video: {
                             facingMode: facingMode,
-                            width: { ideal: 1280 },
-                            height: { ideal: 720 }
-                        } : {
                             width: { ideal: 1280 },
                             height: { ideal: 720 }
                         },
@@ -507,27 +531,34 @@
                     setTimeout(() => reject(new Error('Video loading timeout')), 10000);
                 });
 
-                // Add iOS-specific message if needed
-                if (isIOS && !localStorage.getItem('iosPermissionShown')) {
-                    showStatusMessage('For best experience, allow camera and microphone access in Settings', 5000);
-                    localStorage.setItem('iosPermissionShown', 'true');
-                }
-
             } catch (error) {
                 console.error('Camera/Audio initialization failed:', error);
-                if (error.name === 'NotAllowedError') {
-                    if (/iPad|iPhone|iPod/.test(navigator.userAgent)) {
-                        showStatusMessage('Please enable camera and microphone access in iOS Settings', 5000);
-                    } else {
-                        showStatusMessage('Please allow camera and microphone access');
-                    }
-                } else {
-                    showStatusMessage('Camera error: ' + error.message);
-                }
-                globals.isCameraRunning = false;
+                handleIOSPermissionError(error);
             } finally {
                 globals.isInitializing = false;
             }
+        }
+
+        // Add helper function for iOS permission errors
+        function handleIOSPermissionError(error) {
+            if (error.name === 'NotAllowedError') {
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                if (isIOS) {
+                    showStatusMessage(
+                        'Please enable camera and microphone access:\n' +
+                        '1. Go to iOS Settings\n' +
+                        '2. Scroll down to Safari\n' +
+                        '3. Find Camera & Microphone\n' +
+                        '4. Allow access for this website',
+                        8000
+                    );
+                } else {
+                    showStatusMessage('Please allow camera and microphone access');
+                }
+            } else {
+                showStatusMessage('Camera error: ' + error.message);
+            }
+            globals.isCameraRunning = false;
         }
 
         // Event Listeners
@@ -825,7 +856,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.7.7');
+        console.log('Camera App v1.7.8');
     </script>
 </body>
 </html>

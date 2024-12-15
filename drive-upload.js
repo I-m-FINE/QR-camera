@@ -4,6 +4,7 @@ const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
+let accessTokenPromise = null; // Add this to cache the token promise
 
 // Initialize the tokenClient
 function initializeGapiClient() {
@@ -20,11 +21,12 @@ function initializeGis() {
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/drive.file',
-        prompt: '', // This prevents showing prompt every time
+        prompt: '', // Prevent automatic prompt
         callback: (response) => {
             if (response.access_token) {
                 localStorage.setItem('gapi_token', response.access_token);
-                localStorage.setItem('gapi_token_expiry', Date.now() + (response.expires_in * 1000));
+                const expiryTime = Date.now() + (response.expires_in * 1000);
+                localStorage.setItem('gapi_token_expiry', expiryTime.toString());
                 console.log('Token stored successfully');
             }
         }
@@ -41,6 +43,11 @@ function maybeEnableButtons() {
 
 // Get access token using stored token or request new one
 async function getAccessToken() {
+    // If we already have a pending token request, return it
+    if (accessTokenPromise) {
+        return accessTokenPromise;
+    }
+
     const storedToken = localStorage.getItem('gapi_token');
     const tokenExpiry = localStorage.getItem('gapi_token_expiry');
     
@@ -49,24 +56,32 @@ async function getAccessToken() {
         return storedToken;
     }
 
-    // If no valid token, request new one without prompt
-    return new Promise((resolve, reject) => {
+    // Create new token request
+    accessTokenPromise = new Promise((resolve, reject) => {
         try {
             tokenClient.callback = (response) => {
+                accessTokenPromise = null; // Clear the promise
                 if (response.error !== undefined) {
                     reject(response);
                     return;
                 }
                 resolve(response.access_token);
             };
-            // Request token without prompt
-            tokenClient.requestAccessToken({ prompt: '' });
+            
+            if (!storedToken) {
+                // First time authentication
+                tokenClient.requestAccessToken({ prompt: 'consent' });
+            } else {
+                // Token refresh
+                tokenClient.requestAccessToken({ prompt: '' });
+            }
         } catch (err) {
-            // If silent token refresh fails, then request with prompt
-            tokenClient.requestAccessToken({ prompt: 'consent' });
+            accessTokenPromise = null; // Clear the promise
             reject(err);
         }
     });
+
+    return accessTokenPromise;
 }
 
 async function uploadToDrive(file, type = 'image') {
@@ -100,9 +115,10 @@ async function uploadToDrive(file, type = 'image') {
 
         if (!response.ok) {
             if (response.status === 401) {
-                // Token expired, clear storage and try again silently
+                // Clear stored token and retry once
                 localStorage.removeItem('gapi_token');
                 localStorage.removeItem('gapi_token_expiry');
+                accessTokenPromise = null;
                 return uploadToDrive(file, type);
             }
             throw new Error(`Upload failed: ${response.statusText}`);

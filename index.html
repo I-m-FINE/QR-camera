@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-06');</script>
+    <script>console.log('Camera App v1.0.5-07');</script>
     <style>
         /* Reset default styles */
         * {
@@ -611,9 +611,28 @@
 
             const video = document.getElementById('camera');
             const canvas = document.createElement('canvas');
-            canvas.width = video.videoWidth;
-            canvas.height = video.videoHeight;
-            canvas.getContext('2d').drawImage(video, 0, 0);
+            
+            // iOS specific adjustments
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            if (isIOS) {
+                // Handle iOS orientation
+                if (window.orientation === 90 || window.orientation === -90) {
+                    canvas.width = video.videoHeight;
+                    canvas.height = video.videoWidth;
+                    const ctx = canvas.getContext('2d');
+                    ctx.translate(canvas.width, 0);
+                    ctx.rotate(Math.PI / 2);
+                    ctx.drawImage(video, 0, 0);
+                } else {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.getContext('2d').drawImage(video, 0, 0);
+                }
+            } else {
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                canvas.getContext('2d').drawImage(video, 0, 0);
+            }
             
             canvas.toBlob(async (blob) => {
                 showStatusMessage('Processing photo...');
@@ -643,34 +662,25 @@
                 const stream = video.srcObject;
                 
                 try {
-                    // Check supported MIME types with audio codecs
                     let options;
                     if (isIOS) {
-                        // iOS-specific options
-                        if (MediaRecorder.isTypeSupported('video/mp4;codecs=h264,aac')) {
-                            options = { mimeType: 'video/mp4;codecs=h264,aac' };
-                        } else if (MediaRecorder.isTypeSupported('video/mp4')) {
-                            options = { mimeType: 'video/mp4' };
-                        } else {
-                            throw new Error('No supported video codec found for this device');
+                        // iOS specific recording options
+                        options = {
+                            mimeType: 'video/mp4;codecs=h264,aac',
+                            videoBitsPerSecond: 2000000,
+                            audioBitsPerSecond: 128000
+                        };
+                        
+                        if (!MediaRecorder.isTypeSupported(options.mimeType)) {
+                            options.mimeType = 'video/mp4';
                         }
                     } else {
                         // Default options for other devices
-                        if (MediaRecorder.isTypeSupported('video/webm;codecs=h264,opus')) {
-                            options = {
-                                mimeType: 'video/webm;codecs=h264,opus',
-                                videoBitsPerSecond: 2500000,
-                                audioBitsPerSecond: 128000
-                            };
-                        } else if (MediaRecorder.isTypeSupported('video/webm')) {
-                            options = {
-                                mimeType: 'video/webm',
-                                videoBitsPerSecond: 2500000,
-                                audioBitsPerSecond: 128000
-                            };
-                        } else {
-                            throw new Error('No supported video codec found for this device');
-                        }
+                        options = {
+                            mimeType: 'video/webm;codecs=h264,opus',
+                            videoBitsPerSecond: 2500000,
+                            audioBitsPerSecond: 128000
+                        };
                     }
 
                     globals.mediaRecorder = new MediaRecorder(stream, options);
@@ -698,15 +708,9 @@
                         globals.recordedChunks = [];
                     };
 
-                    // Start recording
+                    // Start recording with shorter intervals for iOS
                     globals.mediaRecorder.start(isIOS ? 100 : 1000);
                     this.classList.add('recording');
-                    this.innerHTML = `
-                        <svg class="recording-icon" width="24" height="24" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="8" fill="red"/>
-                        </svg>
-                    `;
-                    
                     showStatusMessage('Recording started...', 1000);
                     
                 } catch (error) {
@@ -719,11 +723,9 @@
                 this.classList.remove('recording');
                 this.innerHTML = `
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="white">
-                        <circle cx="12" cy="12" r="8" stroke="currentColor" stroke-width="2" fill="none"/>
-                        <circle cx="12" cy="12" r="3" fill="currentColor"/>
+                        <circle cx="12" cy="12" r="8"/>
                     </svg>
                 `;
-                showStatusMessage('Recording stopped', 1000);
             }
         });
 
@@ -740,7 +742,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5-06');
+        console.log('Camera App v1.0.5-07');
     </script>
 </body>
 </html>

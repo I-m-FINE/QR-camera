@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-02');</script>
+    <script>console.log('Camera App v1.0.5-03');</script>
     <style>
         /* Reset default styles */
         * {
@@ -810,7 +810,7 @@
                     
                     try {
                         // Upload to main folder
-                        showStatusMessage('Uploading to main folder...');
+                        showStatusMessage('Uploading to folder...');
                         const mainForm = new FormData();
                         const mainMetadata = {
                             name: `photo_${new Date().toISOString()}.jpg`,
@@ -830,10 +830,10 @@
                             body: mainForm
                         });
 
-                        if (!mainResponse.ok) throw new Error('Main folder upload failed');
+                        if (!mainResponse.ok) throw new Error('upload failed');
 
                         // Upload to backup folder
-                        showStatusMessage('Uploading to backup folder...');
+                        showStatusMessage('Uploading to folder...');
                         const backupForm = new FormData();
                         const backupMetadata = {
                             name: `photo_${new Date().toISOString()}_backup.jpg`,
@@ -850,7 +850,7 @@
                             body: backupForm
                         });
 
-                        if (!backupResponse.ok) throw new Error('Backup folder upload failed');
+                        if (!backupResponse.ok) throw new Error('upload failed');
 
                         showStatusMessage('✓ Photo uploaded successfully', 2000);
                         if (isIOS && navigator.vibrate) navigator.vibrate(200);
@@ -1099,7 +1099,7 @@
             }
         });
         // Update version
-        console.log('Camera App v1.0.5-02');
+        console.log('Camera App v1.0.5-03');
     </script>
 </body>
 </html>

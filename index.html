@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.0.5-001');</script>
+    <script>console.log('Camera App v1.0.5-01');</script>
     <style>
         /* Reset default styles */
         * {
@@ -965,21 +965,12 @@
             }
         });
 
-        // Update the record button handler
+        // Update the record button handler to include Android auth
         document.getElementById('recordButton').addEventListener('click', async function() {
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
             const isAndroid = /Android/.test(navigator.userAgent);
             
-            if (isAndroid) {
-                showStatusMessage('Preparing authentication...');
-                try {
-                    await handleAndroidAuth();
-                } catch (error) {
-                    console.error('Android Auth failed:', error);
-                    showStatusMessage('Please sign in to continue');
-                    return;
-                }
-            } else if (isIOS) {
+            if (isIOS) {
                 // Keep existing iOS auth code
                 try {
                     const authSuccess = await handleIOSAuth();
@@ -988,6 +979,17 @@
                     }
                 } catch (error) {
                     console.error('Auth failed:', error);
+                    return;
+                }
+            } else if (isAndroid) {
+                try {
+                    const authSuccess = await handleAndroidAuth();
+                    if (!authSuccess) {
+                        showStatusMessage('Please sign in to continue');
+                        return;
+                    }
+                } catch (error) {
+                    console.error('Android Auth failed:', error);
                     return;
                 }
             }
@@ -1203,8 +1205,108 @@
                 console.log('Cleared existing token on page load');
             }
         });
+
+        // Add this code for Android initial auth check
+        document.addEventListener('DOMContentLoaded', () => {
+            const isAndroid = /Android/.test(navigator.userAgent);
+            const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            
+            if (isAndroid && !isIOS) {
+                console.log('Android device detected, initiating auth...');
+                setTimeout(async () => {
+                    try {
+                        await handleAndroidAuth();
+                    } catch (error) {
+                        console.log('Initial Android auth cancelled or failed:', error);
+                    }
+                }, 1000); // Small delay to ensure everything is loaded
+            }
+        });
+
+        // Keep the existing Android auth handler
+        async function handleAndroidAuth() {
+            console.log('Starting Android authentication...');
+            return new Promise((resolve, reject) => {
+                // Always show the sign-in overlay for Android
+                const overlay = document.createElement('div');
+                overlay.style.cssText = `
+                    position: fixed;
+                    top: 0;
+                    left: 0;
+                    width: 100%;
+                    height: 100%;
+                    background: rgba(0,0,0,0.8);
+                    z-index: 10000;
+                    display: flex;
+                    flex-direction: column;
+                    align-items: center;
+                    justify-content: center;
+                `;
+
+                const signInButton = document.createElement('button');
+                signInButton.style.cssText = `
+                    padding: 12px 24px;
+                    font-size: 16px;
+                    background: #4285f4;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    margin: 10px;
+                    cursor: pointer;
+                    font-weight: bold;
+                `;
+                signInButton.textContent = 'Sign in with Google';
+
+                const closeButton = document.createElement('button');
+                closeButton.style.cssText = `
+                    padding: 12px 24px;
+                    font-size: 16px;
+                    background: #666;
+                    color: white;
+                    border: none;
+                    border-radius: 4px;
+                    margin: 10px;
+                    cursor: pointer;
+                `;
+                closeButton.textContent = 'Cancel';
+
+                overlay.appendChild(signInButton);
+                overlay.appendChild(closeButton);
+                document.body.appendChild(overlay);
+
+                signInButton.addEventListener('click', () => {
+                    showStatusMessage('Connecting to Google...');
+                    google.accounts.oauth2.initTokenClient({
+                        client_id: '997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com',
+                        scope: 'https://www.googleapis.com/auth/drive.file',
+                        callback: (response) => {
+                            if (response.access_token) {
+                                localStorage.setItem('googleToken', response.access_token);
+                                overlay.remove();
+                                showStatusMessage('Successfully signed in', 2000);
+                                resolve(true);
+                            } else {
+                                showStatusMessage('Sign-in failed');
+                                reject(new Error('Sign-in failed'));
+                            }
+                        },
+                        error_callback: (error) => {
+                            console.error('Google Sign-In error:', error);
+                            showStatusMessage('Sign-in failed');
+                            reject(error);
+                        }
+                    }).requestAccessToken();
+                });
+
+                closeButton.addEventListener('click', () => {
+                    overlay.remove();
+                    reject(new Error('Sign-in cancelled'));
+                });
+            });
+        }
+
         // Update version
-        console.log('Camera App v1.0.5-001');
+        console.log('Camera App v1.0.5-01');
     </script>
 </body>
 </html>

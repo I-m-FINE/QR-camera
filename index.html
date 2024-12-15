@@ -8,7 +8,7 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.8.7');</script>
+    <script>console.log('Camera App v1.8.8');</script>
     <style>
         * {
             margin: 0;
@@ -329,6 +329,14 @@
                 touch-action: manipulation;
             }
         }
+
+        #camera {
+            transition: transform 0.3s ease-out;
+        }
+
+        .camera-container {
+            overflow: hidden !important;
+        }
     </style>
 </head>
 
@@ -448,6 +456,7 @@
             const zoomControls = document.querySelector('.zoom-controls');
             const track = globals.currentStream?.getVideoTracks()[0];
             const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+            const camera = document.getElementById('camera');
             
             if (!track) {
                 zoomControls.style.display = 'none';
@@ -455,93 +464,67 @@
             }
 
             if (isIOS) {
-                console.log('Initializing iOS zoom controls');
-                try {
-                    // Test if zoom is supported on this iOS device
-                    const settings = await track.getSettings();
-                    const capabilities = await track.getCapabilities();
-                    console.log('iOS Camera Capabilities:', capabilities);
-                    console.log('iOS Camera Settings:', settings);
+                console.log('Initializing iOS zoom controls with CSS fallback');
+                zoomControls.style.display = 'flex';
+                globals.minZoom = 1;
+                globals.maxZoom = 3;
+                globals.currentZoom = 1;
+                globals.zoomStep = 0.2;
 
-                    // Set up iOS specific zoom
-                    zoomControls.style.display = 'flex';
-                    globals.minZoom = 1;
-                    globals.maxZoom = 2; // Reduced max zoom for better iOS compatibility
-                    globals.currentZoom = 1;
-                    globals.zoomStep = 0.2; // Smaller steps for smoother zoom
+                // Add CSS transform origin
+                camera.style.transformOrigin = 'center';
+                
+                const applyIOSZoom = (newZoom) => {
+                    try {
+                        camera.style.transform = `scale(${newZoom})`;
+                        globals.currentZoom = newZoom;
+                        updateZoomUI();
+                        console.log('iOS CSS zoom applied:', newZoom);
+                    } catch (error) {
+                        console.error('iOS CSS zoom error:', error);
+                    }
+                };
 
-                    // Initialize zoom capability
-                    await track.applyConstraints({
-                        advanced: [{ 
-                            zoom: 1
-                        }]
-                    });
+                // Zoom in button
+                document.getElementById('zoomIn').onclick = () => {
+                    const newZoom = Math.min(globals.currentZoom + globals.zoomStep, globals.maxZoom);
+                    applyIOSZoom(newZoom);
+                };
 
-                    const applyIOSZoom = async (newZoom) => {
-                        try {
-                            // Try multiple constraint formats
-                            const constraints = {
-                                advanced: [{
-                                    zoom: newZoom
-                                }]
-                            };
+                // Zoom out button
+                document.getElementById('zoomOut').onclick = () => {
+                    const newZoom = Math.max(globals.currentZoom - globals.zoomStep, globals.minZoom);
+                    applyIOSZoom(newZoom);
+                };
 
-                            await track.applyConstraints(constraints);
-                            globals.currentZoom = newZoom;
-                            updateZoomUI();
-                            console.log('iOS zoom applied:', newZoom);
-                        } catch (error) {
-                            console.error('iOS zoom error:', error);
-                        }
-                    };
+                // Pinch zoom
+                let initialDistance = 0;
+                let initialZoom = 1;
 
-                    // Zoom in button
-                    document.getElementById('zoomIn').onclick = async () => {
-                        const newZoom = Math.min(globals.currentZoom + globals.zoomStep, globals.maxZoom);
-                        await applyIOSZoom(newZoom);
-                    };
+                camera.addEventListener('touchstart', (e) => {
+                    if (e.touches.length === 2) {
+                        e.preventDefault();
+                        initialDistance = getDistance(e.touches[0], e.touches[1]);
+                        initialZoom = globals.currentZoom;
+                    }
+                }, { passive: false });
 
-                    // Zoom out button
-                    document.getElementById('zoomOut').onclick = async () => {
-                        const newZoom = Math.max(globals.currentZoom - globals.zoomStep, globals.minZoom);
-                        await applyIOSZoom(newZoom);
-                    };
+                camera.addEventListener('touchmove', (e) => {
+                    if (e.touches.length === 2) {
+                        e.preventDefault();
+                        const distance = getDistance(e.touches[0], e.touches[1]);
+                        const scale = distance / initialDistance;
+                        const newZoom = Math.max(globals.minZoom, 
+                            Math.min(globals.maxZoom, initialZoom * scale));
+                        applyIOSZoom(newZoom);
+                    }
+                }, { passive: false });
 
-                    // Pinch zoom
-                    const camera = document.getElementById('camera');
-                    let initialDistance = 0;
-                    let initialZoom = 1;
-
-                    camera.addEventListener('touchstart', (e) => {
-                        if (e.touches.length === 2) {
-                            e.preventDefault();
-                            initialDistance = getDistance(e.touches[0], e.touches[1]);
-                            initialZoom = globals.currentZoom;
-                        }
-                    }, { passive: false });
-
-                    camera.addEventListener('touchmove', async (e) => {
-                        if (e.touches.length === 2) {
-                            e.preventDefault();
-                            const distance = getDistance(e.touches[0], e.touches[1]);
-                            const scale = distance / initialDistance;
-                            const newZoom = Math.max(globals.minZoom, 
-                                Math.min(globals.maxZoom, initialZoom * scale));
-                            await applyIOSZoom(newZoom);
-                        }
-                    }, { passive: false });
-
-                    // Initial UI update
-                    updateZoomUI();
-
-                } catch (error) {
-                    console.error('iOS zoom initialization error:', error);
-                    // If zoom initialization fails, hide the controls
-                    zoomControls.style.display = 'none';
-                }
+                // Initial UI update
+                updateZoomUI();
 
             } else {
-                // Non-iOS devices (Android, etc.)
+                // Non-iOS devices (Android, etc.) - keep existing code
                 try {
                     const capabilities = track.getCapabilities();
                     
@@ -920,7 +903,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.8.7');
+        console.log('Camera App v1.8.8');
     </script>
 </body>
 </html>

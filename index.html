@@ -7,7 +7,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <title>Camera Upload</title>
     <meta name="google-signin-client_id" content="997301043207-c9bs9jdbrhkg624qgf76qa9btfs8e0qj.apps.googleusercontent.com">
-    <script>console.log('Camera App v1.7.4');</script>
+    <script>console.log('Camera App v1.7.5');</script>
     <style>
         * {
             margin: 0;
@@ -413,19 +413,41 @@
                     throw new Error('Video element not found');
                 }
 
-                // Cleanup existing stream
+                // Stop any existing stream
                 if (globals.currentStream) {
-                    utils.cleanupMediaStream(globals.currentStream);
+                    globals.currentStream.getTracks().forEach(track => track.stop());
                 }
 
-                const constraints = {
-                    video: {
-                        facingMode: facingMode,
-                        width: { ideal: 1280 },
-                        height: { ideal: 720 }
-                    },
-                    audio: false
-                };
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                let constraints;
+                if (isMobile) {
+                    constraints = {
+                        video: {
+                            facingMode: facingMode,
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        },
+                        audio: false
+                    };
+                } else {
+                    // For desktop/laptop
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    
+                    if (videoDevices.length > 0) {
+                        constraints = {
+                            video: {
+                                deviceId: { ideal: videoDevices[0].deviceId },
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            },
+                            audio: false
+                        };
+                    } else {
+                        throw new Error('No cameras found');
+                    }
+                }
 
                 const stream = await navigator.mediaDevices.getUserMedia(constraints);
                 video.srcObject = stream;
@@ -447,7 +469,8 @@
                 });
 
             } catch (error) {
-                utils.handleError(error, 'Camera initialization failed');
+                console.error('Camera initialization failed:', error);
+                showStatusMessage('Camera error: ' + error.message);
                 globals.isCameraRunning = false;
             } finally {
                 globals.isInitializing = false;
@@ -481,17 +504,104 @@
 
         // Camera Controls
         document.getElementById('switchCamera').addEventListener('click', async () => {
-            const newMode = globals.currentFacingMode === 'environment' ? 'user' : 'environment';
+            console.log('Attempting to switch camera...');
             
+            // Stop recording if active
             if (globals.mediaRecorder?.state === 'recording') {
                 globals.mediaRecorder.stop();
                 document.getElementById('recordButton').classList.remove('recording');
             }
 
             try {
-                await startCamera(newMode);
+                // Stop current stream
+                if (globals.currentStream) {
+                    globals.currentStream.getTracks().forEach(track => track.stop());
+                }
+
+                // Toggle facing mode
+                globals.currentFacingMode = globals.currentFacingMode === 'environment' ? 'user' : 'environment';
+                
+                // Get video constraints based on device
+                const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent);
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                
+                let constraints;
+                if (isMobile) {
+                    constraints = {
+                        video: {
+                            facingMode: globals.currentFacingMode,
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 }
+                        },
+                        audio: false
+                    };
+                } else {
+                    // For desktop/laptop - use deviceId if available
+                    const devices = await navigator.mediaDevices.enumerateDevices();
+                    const videoDevices = devices.filter(device => device.kind === 'videoinput');
+                    
+                    if (videoDevices.length > 1) {
+                        // If current stream exists, get current camera id
+                        const currentTrack = globals.currentStream?.getVideoTracks()[0];
+                        const currentDeviceId = currentTrack?.getSettings()?.deviceId;
+                        
+                        // Find next camera
+                        const currentIndex = videoDevices.findIndex(device => device.deviceId === currentDeviceId);
+                        const nextDevice = videoDevices[(currentIndex + 1) % videoDevices.length];
+                        
+                        constraints = {
+                            video: {
+                                deviceId: { exact: nextDevice.deviceId },
+                                width: { ideal: 1280 },
+                                height: { ideal: 720 }
+                            },
+                            audio: false
+                        };
+                    } else {
+                        showStatusMessage('No additional cameras found');
+                        return;
+                    }
+                }
+
+                console.log('Using constraints:', constraints);
+
+                // Get new stream
+                const stream = await navigator.mediaDevices.getUserMedia(constraints);
+                
+                // Update video element
+                const video = document.getElementById('camera');
+                video.srcObject = stream;
+                globals.currentStream = stream;
+
+                // Wait for video to be ready
+                await new Promise((resolve, reject) => {
+                    video.onloadedmetadata = () => {
+                        video.play()
+                            .then(() => {
+                                console.log('Camera switched successfully');
+                                globals.isCameraRunning = true;
+                                resolve();
+                            })
+                            .catch(reject);
+                    };
+                    video.onerror = reject;
+                    setTimeout(() => reject(new Error('Video loading timeout')), 10000);
+                });
+
+                showStatusMessage('Camera switched', 1000);
+
             } catch (error) {
-                utils.handleError(error, 'Failed to switch camera');
+                console.error('Failed to switch camera:', error);
+                showStatusMessage('Failed to switch camera. Please try again.');
+                
+                // Try to restore previous camera
+                try {
+                    globals.currentFacingMode = globals.currentFacingMode === 'environment' ? 'user' : 'environment';
+                    await startCamera(globals.currentFacingMode);
+                } catch (restoreError) {
+                    console.error('Failed to restore camera:', restoreError);
+                    showStatusMessage('Camera error. Please refresh the page.');
+                }
             }
         });
 
@@ -648,7 +758,7 @@
         });
 
         // Update version
-        console.log('Camera App v1.7.4');
+        console.log('Camera App v1.7.5');
     </script>
 </body>
 </html>

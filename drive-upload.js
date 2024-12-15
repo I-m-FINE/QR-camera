@@ -131,93 +131,78 @@ window.addEventListener('load', function() {
 async function uploadToDrive(file, type = 'image') {
     // Replace these with your actual folder IDs
     const MAIN_FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
-    const BACKUP_FOLDER_ID = '1vsvYXG3w_nnJOp845et41CJWrRP4iFHF'; // Add your backup folder ID here
+    const BACKUP_FOLDER_ID = '1Hs_YPCwGq_YZPgxhR_Wd5YlGcBxXYZ12'; // Make sure this is your correct backup folder ID
 
-    try {
-        let token;
+    async function uploadToFolder(folderId, isBackup = false) {
+        console.log(`Attempting upload to folder: ${folderId} (${isBackup ? 'Backup' : 'Main'})`);
+        
+        const metadata = {
+            name: `${type}_${new Date().toISOString()}${isBackup ? '_backup' : ''}.${type === 'image' ? 'jpg' : 'mp4'}`,
+            mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
+            parents: [folderId]
+        };
+
+        console.log('Uploading with metadata:', metadata);
+
+        const form = new FormData();
+        form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
+        form.append('file', file);
+
         try {
-            token = await getAccessToken();
-        } catch (error) {
-            console.error('Authentication error:', error);
-            utils.showMessage('Please sign in to upload');
-            return;
-        }
-
-        // First upload to main folder
-        const mainUpload = async () => {
-            const metadata = {
-                name: `${type}_${new Date().toISOString()}.${type === 'image' ? 'jpg' : 'mp4'}`,
-                mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
-                parents: [MAIN_FOLDER_ID]
-            };
-
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', file);
-
             const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${token}`,
+                    'Authorization': `Bearer ${await getAccessToken()}`,
                 },
                 body: form
             });
 
             if (!response.ok) {
-                throw new Error(`Main upload failed: ${response.statusText}`);
+                const errorText = await response.text();
+                console.error(`Upload failed to ${isBackup ? 'backup' : 'main'} folder:`, errorText);
+                throw new Error(`Upload to ${isBackup ? 'backup' : 'main'} folder failed: ${response.statusText}`);
             }
 
-            return await response.json();
-        };
-
-        // Then upload to backup folder
-        const backupUpload = async () => {
-            const metadata = {
-                name: `${type}_${new Date().toISOString()}_backup.${type === 'image' ? 'jpg' : 'mp4'}`,
-                mimeType: type === 'image' ? 'image/jpeg' : 'video/mp4',
-                parents: [BACKUP_FOLDER_ID]
-            };
-
-            const form = new FormData();
-            form.append('metadata', new Blob([JSON.stringify(metadata)], { type: 'application/json' }));
-            form.append('file', file);
-
-            const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart', {
-                method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${token}`,
-                },
-                body: form
-            });
-
-            if (!response.ok) {
-                throw new Error(`Backup upload failed: ${response.statusText}`);
-            }
-
-            return await response.json();
-        };
-
-        // Execute both uploads
-        try {
-            const [mainResult, backupResult] = await Promise.all([mainUpload(), backupUpload()]);
-            console.log('Main upload:', mainResult);
-            console.log('Backup upload:', backupResult);
-            utils.showMessage('Upload complete to both folders', 2000);
-            return { main: mainResult, backup: backupResult };
+            const result = await response.json();
+            console.log(`Successfully uploaded to ${isBackup ? 'backup' : 'main'} folder:`, result);
+            return result;
         } catch (error) {
-            if (error.message.includes('401')) {
-                // Token expired, retry once
-                accessToken = null;
-                return uploadToDrive(file, type);
-            }
+            console.error(`Error in ${isBackup ? 'backup' : 'main'} upload:`, error);
             throw error;
         }
+    }
+
+    try {
+        // Get token once for both uploads
+        const token = await getAccessToken();
+        if (!token) {
+            throw new Error('Failed to get access token');
+        }
+
+        console.log('Starting uploads to both folders...');
+
+        // Upload to main folder
+        const mainResult = await uploadToFolder(MAIN_FOLDER_ID, false);
+        console.log('Main folder upload complete');
+
+        // Upload to backup folder
+        const backupResult = await uploadToFolder(BACKUP_FOLDER_ID, true);
+        console.log('Backup folder upload complete');
+
+        utils.showMessage('Upload complete to both folders', 2000);
+        return { main: mainResult, backup: backupResult };
 
     } catch (error) {
-        console.error('Upload error:', error);
+        console.error('Upload process error:', error);
         utils.showMessage('Upload failed: ' + error.message);
         throw error;
     }
+}
+
+// Helper function to show status
+function showStatus(message) {
+    console.log(message);
+    utils.showMessage(message);
 }
 
 // Export functions

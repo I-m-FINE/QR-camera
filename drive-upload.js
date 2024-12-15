@@ -4,7 +4,30 @@ const FOLDER_ID = '1NQFgJNr4gOIBuTYeIKhtru6tdp1oAZyB';
 let tokenClient;
 let gapiInited = false;
 let gisInited = false;
-let accessTokenPromise = null; // Add this to cache the token promise
+let accessTokenPromise = null;
+
+// Helper functions
+const utils = {
+    showMessage: function(message, duration = 3000) {
+        const statusEl = document.getElementById('statusMessage') || document.createElement('div');
+        statusEl.id = 'statusMessage';
+        statusEl.style.cssText = `
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 15px 20px;
+            border-radius: 8px;
+            z-index: 9999;
+            text-align: center;
+        `;
+        statusEl.textContent = message;
+        document.body.appendChild(statusEl);
+        setTimeout(() => statusEl.remove(), duration);
+    }
+};
 
 // Initialize the tokenClient
 function initializeGapiClient() {
@@ -21,7 +44,7 @@ function initializeGis() {
     tokenClient = google.accounts.oauth2.initTokenClient({
         client_id: CLIENT_ID,
         scope: 'https://www.googleapis.com/auth/drive.file',
-        prompt: '', // Prevent automatic prompt
+        prompt: '',
         callback: (response) => {
             if (response.access_token) {
                 localStorage.setItem('gapi_token', response.access_token);
@@ -41,9 +64,7 @@ function maybeEnableButtons() {
     }
 }
 
-// Get access token using stored token or request new one
 async function getAccessToken() {
-    // If we already have a pending token request, return it
     if (accessTokenPromise) {
         return accessTokenPromise;
     }
@@ -56,11 +77,10 @@ async function getAccessToken() {
         return storedToken;
     }
 
-    // Create new token request
     accessTokenPromise = new Promise((resolve, reject) => {
         try {
             tokenClient.callback = (response) => {
-                accessTokenPromise = null; // Clear the promise
+                accessTokenPromise = null;
                 if (response.error !== undefined) {
                     reject(response);
                     return;
@@ -69,14 +89,12 @@ async function getAccessToken() {
             };
             
             if (!storedToken) {
-                // First time authentication
                 tokenClient.requestAccessToken({ prompt: 'consent' });
             } else {
-                // Token refresh
                 tokenClient.requestAccessToken({ prompt: '' });
             }
         } catch (err) {
-            accessTokenPromise = null; // Clear the promise
+            accessTokenPromise = null;
             reject(err);
         }
     });
@@ -101,7 +119,7 @@ async function uploadToDrive(file, type = 'image') {
             accessToken = await getAccessToken();
         } catch (error) {
             console.error('Authentication error:', error);
-            showStatusMessage('Please sign in to upload');
+            utils.showMessage('Please sign in to upload');
             return;
         }
 
@@ -115,7 +133,6 @@ async function uploadToDrive(file, type = 'image') {
 
         if (!response.ok) {
             if (response.status === 401) {
-                // Clear stored token and retry once
                 localStorage.removeItem('gapi_token');
                 localStorage.removeItem('gapi_token_expiry');
                 accessTokenPromise = null;
@@ -126,59 +143,22 @@ async function uploadToDrive(file, type = 'image') {
 
         const result = await response.json();
         console.log('File uploaded successfully:', result);
-        showStatusMessage('Upload complete', 2000);
+        utils.showMessage('Upload complete', 2000);
         return result;
 
     } catch (error) {
         console.error('Upload error:', error);
-        showStatusMessage('Upload failed: ' + error.message);
+        utils.showMessage('Upload failed: ' + error.message);
         throw error;
     }
 }
 
-function showStatusMessage(message, duration = 3000) {
-    const statusEl = document.getElementById('statusMessage') || document.createElement('div');
-    statusEl.id = 'statusMessage';
-    statusEl.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.8);
-        color: white;
-        padding: 15px 20px;
-        border-radius: 8px;
-        z-index: 9999;
-        text-align: center;
-    `;
-    statusEl.textContent = message;
-    document.body.appendChild(statusEl);
-    setTimeout(() => statusEl.remove(), duration);
-}
-
-// Add function to check if user is already authenticated
-function isAuthenticated() {
-    const token = localStorage.getItem('gapi_token');
-    const expiry = localStorage.getItem('gapi_token_expiry');
-    return token && expiry && Date.now() < parseInt(expiry);
-}
-
-// Initialize the Google APIs and check authentication
-document.addEventListener('DOMContentLoaded', async () => {
-    gapi.load('client', async () => {
-        await initializeGapiClient();
-        initializeGis();
-        
-        // If not authenticated, do initial authentication
-        if (!isAuthenticated()) {
-            try {
-                await getAccessToken();
-            } catch (error) {
-                console.error('Initial authentication failed:', error);
-            }
-        }
-    });
+// Initialize the Google APIs
+document.addEventListener('DOMContentLoaded', () => {
+    gapi.load('client', initializeGapiClient);
+    initializeGis();
 });
 
-// Export functions
+// Export functions and utils
 window.uploadToDrive = uploadToDrive;
+window.utils = utils;
